@@ -96,9 +96,12 @@ cp .env.example .env
 # Get your token from @BotFather on Telegram
 ```
 
-Minimum required configuration:
+Minimum configuration:
 ```env
 BOT_TOKEN=your_bot_token_here
+ADMIN_IDS=your_telegram_user_id   # every handler is admin-only
+OPENAI_MODEL=your_vision_model    # optional: enables bag-photo label reading
+OPENAI_API_KEY=your_api_key
 USE_POLLING=true
 ```
 
@@ -178,6 +181,38 @@ Only needed if `USE_POLLING=false`:
 \* Required for webhook mode  
 \** Leave empty if using reverse proxy
 
+## Dependencies
+
+`requirements.txt` is a fully pinned set (direct and transitive), resolved together and tested on
+Python 3.13. Key versions:
+
+| Package | Version | Used for |
+|---------|---------|----------|
+| `pyTelegramBotAPI` | 4.37.0 | Async Telegram bot, conversation states |
+| `fastapi` / `uvicorn` | 0.143.0 / 0.54.0 | Webhook mode |
+| `openai` | 3.27.0 | Bean label extraction (Chat Completions) |
+| `aiosqlite` | 0.22.1 | Async SQLite |
+| `aiofiles` | 25.1.0 | Required by telebot's pickle state storage |
+| `pydantic` | 2.14.0 | FastAPI models |
+| `loguru` | 0.7.3 | Logging |
+
+`multidict` stays on 6.x because `aiohttp` requires `multidict<7`. `colorama` and `win32_setctime`
+are Windows-only dependencies of `loguru` and are pinned so the file installs the same everywhere.
+
+### Upgrading
+
+Resolve the direct dependencies together in a fresh environment, then re-pin:
+
+```bash
+python -m venv .venv-upgrade
+.venv-upgrade/bin/pip install pyTelegramBotAPI fastapi uvicorn aiohttp aiosqlite aiofiles \
+    loguru python-dotenv openai requests
+.venv-upgrade/bin/pip check
+.venv-upgrade/bin/pip freeze > requirements.txt   # then re-add colorama and win32_setctime
+```
+
+Then run the checks in [Verifying changes](AGENTS.md#verifying-changes) before committing.
+
 ## Development
 
 ### Adding New Commands
@@ -195,7 +230,7 @@ user_commands: CommandSet = CommandSet(
 
 2. Add handler in `src/bot/handlers/general.py`:
 ```python
-@bot.message_handler(commands=["mycommand"], isprivchat=True)
+@bot.message_handler(commands=["mycommand"], isadmin=True, isprivchat=True)
 async def handle_mycommand(message: types.Message, state: AsyncStateContext):
     await notifications.send_message(
         message.chat.id,
@@ -366,6 +401,7 @@ All commands are admin-only (gated by the `isadmin` filter):
 
 ### Bot doesn't respond
 - Check `BOT_TOKEN` is correct
+- Check your Telegram user ID is in `ADMIN_IDS`; non-admins are ignored silently
 - Verify bot is running: `/ping` should respond with "pong"
 - Check logs for errors
 

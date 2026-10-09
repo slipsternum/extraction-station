@@ -96,6 +96,18 @@ Other extension points: conversation states in `src/core/states.py`, data models
 schemas under `src/models/`, repositories in `src/repositories/`, and API routes in
 `src/api/routers/` (register new routers in `src/api/routers/__init__.py`).
 
+## Dependencies
+
+`requirements.txt` pins every package, direct and transitive, as one resolved set, tested on
+Python 3.13. Don't bump a single pin by hand. Re-resolve the direct dependencies in a fresh venv
+instead (see README → Dependencies), run `pip check`, then verify as below. Known constraints:
+
+- `aiofiles` must stay installed: `StatePickleStorage` raises at startup without it.
+- `multidict` is capped below 7 by `aiohttp`.
+- `colorama` and `win32_setctime` are Windows-only `loguru` deps that a Linux `pip freeze`
+  omits; keep them in the file.
+- `openai` is 3.x: use `AsyncOpenAI(...).chat.completions.create`.
+
 ## Verifying changes
 
 There is no automated test suite or configured linter. Before considering a change done:
