@@ -5,8 +5,9 @@ consistent with the conventions below.
 
 ## What this is
 
-An async Telegram bot template built on **pyTelegramBotAPI** (`telebot`, async API)
-with a **FastAPI** app for webhook mode. It can run in two modes:
+Extraction Station: a Telegram bot for logging coffee brews and dialling in (equipment setup,
+bean bags read from photos by an LLM, a button-driven `/brew` log, and LLM tips for the next brew). It is built on an async
+**pyTelegramBotAPI** (`telebot`) template with a **FastAPI** app for webhook mode. It can run in two modes:
 
 - **Polling** (default, `USE_POLLING=true`) — long-polls Telegram; best for development.
 - **Webhook** — serves FastAPI under uvicorn and registers a Telegram webhook; for production.
@@ -24,17 +25,18 @@ src/
   bot/
     commands.py             Command menus (user_commands, admin_commands)
     filters.py              Custom filters: isadmin, isprivchat
+    keyboards.py            Inline keyboard and callback-data helpers
     middlewares.py          Per-user rate limiting
-    handlers/               Command handlers (general.py, admin.py)
+    handlers/               Command handlers (general, admin, setup, beans, brew)
   core/
     bootstrap.py            Wires bot, services, handlers together
     config.py               Environment-driven configuration
     logging.py              Logging adapter over loguru (+ optional Telegram mirror)
     states.py               Conversation states
-  models/                   Dataclasses and SQL schemas
-  repositories/             Async SQLite data access
-  services/                 Business logic (notification_service.py)
-  utils/                    User-facing text
+  models/                   Dataclasses, brew methods/equipment kinds (coffee.py), SQL schema
+  repositories/             Async SQLite data access (equipment, beans, brews)
+  services/                 Business logic: notification, llm, setup, bean, brew, advice
+  utils/                    User-facing text (text.py) and input parsing (parsing.py)
 ```
 
 Startup flow: `main.py` → `app.run()` → `bootstrap_bot()` (create bot → configure
@@ -68,7 +70,22 @@ documented in `README.md` and `.env.example`.
 - **Configuration** is read once at import in `config.py` from environment variables;
   add new settings there rather than calling `os.getenv` elsewhere.
 - **Admin-only** behavior is gated by the `isadmin` filter (`ADMIN_IDS`); private-chat-
-  only behavior by `isprivchat`.
+  only behavior by `isprivchat`. For now every handler is admin-only. `isprivchat` doesn't
+  apply to callback queries (they have no `chat`), so use it on message handlers only.
+- **Multi-step flows** keep their draft in conversation state (`state.add_data` /
+  `async with state.data()`) and write to the database once, on the final confirm. `/brew`
+  loads everything it needs (`BrewService.load_context`) at the start so button taps never hit
+  the database. Callback data is `<flow>:<action>[:<arg>]` (64-byte limit); a flow's catch-all
+  `"<flow>:"` callback handler must be registered last.
+- **Editing messages**: use `notifications.edit_message(message, ...)`, which edits the caption
+  for photo messages and the text otherwise.
+- **LLM calls** go through `LLMService` (OpenAI SDK, Chat Completions, configurable
+  `OPENAI_BASE_URL`/`OPENAI_MODEL`); it is disabled when `OPENAI_MODEL` is unset. Every LLM
+  feature must degrade gracefully: catch failures, log a warning, and keep the core flow working.
+- **Brew advice** (`AdviceService`) runs after a brew is saved, never inside the button flow. It
+  sends this brew plus the bean/method history (with earlier advice) and stores the normalised
+  JSON in `brew_advice`. `BrewService.ai_plan` reads it back into the next `/brew` context, where
+  its `next_brew` values become 🤖 options; grind is dropped if the default grinder has changed.
 
 ## Common extension points
 
@@ -83,6 +100,18 @@ Adding a command (e.g. `/foo`) touches up to three places:
 Other extension points: conversation states in `src/core/states.py`, data models and
 schemas under `src/models/`, repositories in `src/repositories/`, and API routes in
 `src/api/routers/` (register new routers in `src/api/routers/__init__.py`).
+
+## Dependencies
+
+`requirements.txt` pins every package, direct and transitive, as one resolved set, tested on
+Python 3.13. Don't bump a single pin by hand. Re-resolve the direct dependencies in a fresh venv
+instead (see README → Dependencies), run `pip check`, then verify as below. Known constraints:
+
+- `aiofiles` must stay installed: `StatePickleStorage` raises at startup without it.
+- `multidict` is capped below 7 by `aiohttp`.
+- `colorama` and `win32_setctime` are Windows-only `loguru` deps that a Linux `pip freeze`
+  omits; keep them in the file.
+- `openai` is 3.x: use `AsyncOpenAI(...).chat.completions.create`.
 
 ## Verifying changes
 

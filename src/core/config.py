@@ -34,8 +34,13 @@ SQLITE_SCHEMA_PATH = os.getenv("SQLITE_SCHEMA_PATH", "./src/models/schemas/bot_s
 STATE_STORAGE_PATH = os.getenv("STATE_STORAGE_PATH", "./.data/states.pkl")
 
 ADMIN_IDS: list[int] = [int(x) for x in _parse_list_env("ADMIN_IDS")] if os.getenv("ADMIN_IDS") else []
-RATE_LIMIT_COMMAND_SECONDS = int(os.getenv("RATE_LIMIT_COMMAND_SECONDS", "3"))
-RATE_LIMIT_CALLBACK_SECONDS = int(os.getenv("RATE_LIMIT_CALLBACK_SECONDS", "3"))
+RATE_LIMIT_COMMAND_SECONDS = int(os.getenv("RATE_LIMIT_COMMAND_SECONDS", "0"))
+RATE_LIMIT_CALLBACK_SECONDS = int(os.getenv("RATE_LIMIT_CALLBACK_SECONDS", "0"))
+
+OPENAI_API_KEY: str | None = _get_env("OPENAI_API_KEY") or None
+OPENAI_BASE_URL: str | None = _get_env("OPENAI_BASE_URL") or None
+OPENAI_MODEL: str | None = _get_env("OPENAI_MODEL") or None
+OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "60"))
 
 USE_POLLING: bool = os.getenv("USE_POLLING", "true").lower() == "true"
 
@@ -63,6 +68,10 @@ __all__ = [
     "ADMIN_IDS",
     "RATE_LIMIT_COMMAND_SECONDS",
     "RATE_LIMIT_CALLBACK_SECONDS",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "OPENAI_MODEL",
+    "OPENAI_TIMEOUT_SECONDS",
     "USE_POLLING",
     "WEBHOOK_HOST",
     "WEBHOOK_PORT",

@@ -1,6 +1,24 @@
-# Telegram Bot Template
+# Extraction Station
 
-A clean, production-ready async Telegram bot template built with pyTelegramBotAPI and FastAPI. Supports both polling and webhook modes with built-in logging, rate limiting, and database integration.
+A Telegram bot for logging coffee brews and dialling in, built on an async
+pyTelegramBotAPI + FastAPI template.
+
+- **/setup**: register your grinder, espresso machine and dripper once; every brew uses them by default.
+- **/newbean**: send a photo of a bag. An LLM reads the label (name, roaster, origin, process, roast
+  level, roast date, tasting notes) and you confirm or edit it before saving.
+- **/brew**: a button-driven log: beans (defaults to the last ones you used) → method → grind
+  (suggested from your last brew with the same beans, nudged finer/coarser if it was
+  under/over-extracted) → dose/yield/water/temp/time → photo → extraction → clarity → tasting notes
+  (suggested from the bag) → rating → comment → save.
+- **AI next-brew tips**: after you save, the LLM reads this brew and your earlier brews of the same
+  beans and method (tasting notes, clarity, ratio, time, roast age, comments and the advice it gave
+  before) and replies with a diagnosis, one primary change with a full recipe, other ways in and
+  what to taste for. The next `/brew` with those beans shows the tip and offers its numbers as 🤖
+  buttons alongside the finer/coarser rule of thumb.
+- **/history** and **/beans**: recent brews, and your bags (archive a bag when it's finished).
+
+The in-progress brew lives in conversation state; nothing is written to the database until you
+tap **Save**. All handlers are admin-only, so set `ADMIN_IDS` to your own Telegram user ID.
 
 ## Features
 
@@ -83,9 +101,12 @@ cp .env.example .env
 # Get your token from @BotFather on Telegram
 ```
 
-Minimum required configuration:
+Minimum configuration:
 ```env
 BOT_TOKEN=your_bot_token_here
+ADMIN_IDS=your_telegram_user_id   # every handler is admin-only
+OPENAI_MODEL=your_vision_model    # optional: enables label reading and brew tips
+OPENAI_API_KEY=your_api_key
 USE_POLLING=true
 ```
 
@@ -132,8 +153,22 @@ python main.py
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `RATE_LIMIT_COMMAND_SECONDS` | Seconds between commands per user | `3` | No |
-| `RATE_LIMIT_CALLBACK_SECONDS` | Seconds between callbacks per user | `3` | No |
+| `RATE_LIMIT_COMMAND_SECONDS` | Seconds between commands per user | `0` | No |
+| `RATE_LIMIT_CALLBACK_SECONDS` | Seconds between callbacks per user | `0` | No |
+
+### LLM Configuration
+
+Bean label extraction and next-brew tips both use the same model through the OpenAI SDK's Chat
+Completions API, so any OpenAI-compatible provider with a vision model works (OpenAI, OpenRouter,
+a local server, …). Without `OPENAI_MODEL`, beans are entered by hand and `/brew` falls back to
+the rule-of-thumb grind suggestion.
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `OPENAI_MODEL` | Vision-capable model ID; leave empty to disable extraction and tips | - | No |
+| `OPENAI_API_KEY` | API key for the provider | - | No |
+| `OPENAI_BASE_URL` | Base URL of an OpenAI-compatible API | OpenAI | No |
+| `OPENAI_TIMEOUT_SECONDS` | Request timeout | `60` | No |
 
 ### Webhook Configuration
 
@@ -153,6 +188,38 @@ Only needed if `USE_POLLING=false`:
 \* Required for webhook mode  
 \** Leave empty if using reverse proxy
 
+## Dependencies
+
+`requirements.txt` is a fully pinned set (direct and transitive), resolved together and tested on
+Python 3.13. Key versions:
+
+| Package | Version | Used for |
+|---------|---------|----------|
+| `pyTelegramBotAPI` | 4.37.0 | Async Telegram bot, conversation states |
+| `fastapi` / `uvicorn` | 0.143.0 / 0.54.0 | Webhook mode |
+| `openai` | 3.27.0 | Label extraction and brew tips (Chat Completions) |
+| `aiosqlite` | 0.22.1 | Async SQLite |
+| `aiofiles` | 25.1.0 | Required by telebot's pickle state storage |
+| `pydantic` | 2.14.0 | FastAPI models |
+| `loguru` | 0.7.3 | Logging |
+
+`multidict` stays on 6.x because `aiohttp` requires `multidict<7`. `colorama` and `win32_setctime`
+are Windows-only dependencies of `loguru` and are pinned so the file installs the same everywhere.
+
+### Upgrading
+
+Resolve the direct dependencies together in a fresh environment, then re-pin:
+
+```bash
+python -m venv .venv-upgrade
+.venv-upgrade/bin/pip install pyTelegramBotAPI fastapi uvicorn aiohttp aiosqlite aiofiles \
+    loguru python-dotenv openai requests
+.venv-upgrade/bin/pip check
+.venv-upgrade/bin/pip freeze > requirements.txt   # then re-add colorama and win32_setctime
+```
+
+Then run the checks in [Verifying changes](AGENTS.md#verifying-changes) before committing.
+
 ## Development
 
 ### Adding New Commands
@@ -170,7 +237,7 @@ user_commands: CommandSet = CommandSet(
 
 2. Add handler in `src/bot/handlers/general.py`:
 ```python
-@bot.message_handler(commands=["mycommand"], isprivchat=True)
+@bot.message_handler(commands=["mycommand"], isadmin=True, isprivchat=True)
 async def handle_mycommand(message: types.Message, state: AsyncStateContext):
     await notifications.send_message(
         message.chat.id,
@@ -322,21 +389,26 @@ WEBHOOK_SSL_PRIV=./certs/key.pem
 
 Certificates will be auto-generated if paths are set but files don't exist.
 
-## Built-in Commands
+## Commands
 
+All commands are admin-only (gated by the `isadmin` filter):
+
+- `/brew` - Log a brew; AI tips for the next one follow the save
+- `/newbean` - Add a bag of beans from a photo or text
+- `/beans` - List and archive your beans
+- `/history` - Show recent brews
+- `/setup` - Register your grinder, espresso machine and dripper
 - `/start` - Show welcome message
 - `/help` - Show available commands
 - `/ping` - Check bot health
 - `/cancel` - Cancel current operation
-
-Admin-only (gated by the `isadmin` filter):
-
 - `/admin` - Example admin-only command
 
 ## Troubleshooting
 
 ### Bot doesn't respond
 - Check `BOT_TOKEN` is correct
+- Check your Telegram user ID is in `ADMIN_IDS`; non-admins are ignored silently
 - Verify bot is running: `/ping` should respond with "pong"
 - Check logs for errors
 
