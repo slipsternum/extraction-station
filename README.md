@@ -1,6 +1,19 @@
-# Telegram Bot Template
+# Extraction Station
 
-A clean, production-ready async Telegram bot template built with pyTelegramBotAPI and FastAPI. Supports both polling and webhook modes with built-in logging, rate limiting, and database integration.
+A Telegram bot for logging coffee brews and dialling in, built on an async
+pyTelegramBotAPI + FastAPI template.
+
+- **/setup**: register your grinder, espresso machine and dripper once; every brew uses them by default.
+- **/newbean**: send a photo of a bag. An LLM reads the label (name, roaster, origin, process, roast
+  level, roast date, tasting notes) and you confirm or edit it before saving.
+- **/brew**: a button-driven log: beans (defaults to the last ones you used) → method → grind
+  (suggested from your last brew with the same beans, nudged finer/coarser if it was
+  under/over-extracted) → dose/yield/water/temp/time → photo → extraction → clarity → tasting notes
+  (suggested from the bag) → rating → comment → save.
+- **/history** and **/beans**: recent brews, and your bags (archive a bag when it's finished).
+
+The in-progress brew lives in conversation state; nothing is written to the database until you
+tap **Save**. All handlers are admin-only, so set `ADMIN_IDS` to your own Telegram user ID.
 
 ## Features
 
@@ -132,8 +145,20 @@ python main.py
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `RATE_LIMIT_COMMAND_SECONDS` | Seconds between commands per user | `3` | No |
-| `RATE_LIMIT_CALLBACK_SECONDS` | Seconds between callbacks per user | `3` | No |
+| `RATE_LIMIT_COMMAND_SECONDS` | Seconds between commands per user | `0` | No |
+| `RATE_LIMIT_CALLBACK_SECONDS` | Seconds between callbacks per user | `0` | No |
+
+### LLM Configuration
+
+Bean label extraction uses the OpenAI SDK's Chat Completions API, so any OpenAI-compatible
+provider with a vision model works (OpenAI, OpenRouter, a local server, …).
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `OPENAI_MODEL` | Vision-capable model ID; leave empty to disable extraction | - | No |
+| `OPENAI_API_KEY` | API key for the provider | - | No |
+| `OPENAI_BASE_URL` | Base URL of an OpenAI-compatible API | OpenAI | No |
+| `OPENAI_TIMEOUT_SECONDS` | Request timeout | `60` | No |
 
 ### Webhook Configuration
 
@@ -322,15 +347,19 @@ WEBHOOK_SSL_PRIV=./certs/key.pem
 
 Certificates will be auto-generated if paths are set but files don't exist.
 
-## Built-in Commands
+## Commands
 
+All commands are admin-only (gated by the `isadmin` filter):
+
+- `/brew` - Log a brew
+- `/newbean` - Add a bag of beans from a photo or text
+- `/beans` - List and archive your beans
+- `/history` - Show recent brews
+- `/setup` - Register your grinder, espresso machine and dripper
 - `/start` - Show welcome message
 - `/help` - Show available commands
 - `/ping` - Check bot health
 - `/cancel` - Cancel current operation
-
-Admin-only (gated by the `isadmin` filter):
-
 - `/admin` - Example admin-only command
 
 ## Troubleshooting

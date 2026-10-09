@@ -10,12 +10,22 @@ from telebot.asyncio_storage import StatePickleStorage
 from src.bot.commands import admin_commands, user_commands
 from src.bot.filters import bind_filters
 from src.bot.handlers.admin import register_admin_handlers
+from src.bot.handlers.beans import register_bean_handlers
+from src.bot.handlers.brew import register_brew_handlers
 from src.bot.handlers.general import register_general_handlers
+from src.bot.handlers.setup import register_setup_handlers
 from src.bot.middlewares import bind_middlewares
 from src.core import config
 from src.core.logging import logger
 from src.repositories.async_sqlite_adapter import AsyncSQLiteAdapter
+from src.repositories.bean_repository import BeanRepository
+from src.repositories.brew_repository import BrewRepository
+from src.repositories.equipment_repository import EquipmentRepository
+from src.services.bean_service import BeanService
+from src.services.brew_service import BrewService
+from src.services.llm_service import LLMService
 from src.services.notification_service import NotificationService
+from src.services.setup_service import SetupService
 
 ALLOWED_UPDATES = [
     "message",
@@ -32,6 +42,10 @@ class BotContext:
     bot: AsyncTeleBot
     db_adapter: AsyncSQLiteAdapter
     notifications: NotificationService
+    llm: LLMService
+    setup: SetupService
+    beans: BeanService
+    brews: BrewService
 
 
 def _ensure_directories() -> None:
@@ -71,13 +85,28 @@ async def bootstrap_services(bot: AsyncTeleBot) -> BotContext:
     await adapter.connect()
 
     notifications = NotificationService(bot)
+    llm = LLMService(
+        model=config.OPENAI_MODEL,
+        api_key=config.OPENAI_API_KEY,
+        base_url=config.OPENAI_BASE_URL,
+        timeout=config.OPENAI_TIMEOUT_SECONDS,
+    )
+    equipment_repo = EquipmentRepository(adapter)
+    bean_repo = BeanRepository(adapter)
+    brew_repo = BrewRepository(adapter)
 
+    if not llm.enabled:
+        logger.warning("OPENAI_MODEL not set; bean label extraction is disabled.")
     logger.info("Services and repositories initialised.")
 
     return BotContext(
         bot=bot,
         db_adapter=adapter,
         notifications=notifications,
+        llm=llm,
+        setup=SetupService(equipment_repo),
+        beans=BeanService(bot, bean_repo, llm),
+        brews=BrewService(bean_repo, brew_repo, equipment_repo),
     )
 
 
@@ -90,6 +119,21 @@ def register_handlers(context: BotContext) -> None:
     register_admin_handlers(
         bot,
         notifications=context.notifications,
+    )
+    register_setup_handlers(
+        bot,
+        notifications=context.notifications,
+        setup=context.setup,
+    )
+    register_bean_handlers(
+        bot,
+        notifications=context.notifications,
+        beans=context.beans,
+    )
+    register_brew_handlers(
+        bot,
+        notifications=context.notifications,
+        brews=context.brews,
     )
 
 

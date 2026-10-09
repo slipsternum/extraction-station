@@ -64,6 +64,7 @@ async def _shutdown_context(context: BotContext) -> None:
         await context.bot.close_session()
     except Exception as exc:
         logger.warning(f"Failed to close bot session: {exc}")
+    await context.llm.close()
     await context.db_adapter.close()
     await logger.flush()
     await logger.shutdown()

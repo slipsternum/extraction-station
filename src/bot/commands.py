@@ -14,6 +14,11 @@ class CommandSet:
 
 user_commands: CommandSet = CommandSet(
     commands=[
+        BotCommand("brew", "log a brew"),
+        BotCommand("newbean", "add a bag of beans from a photo"),
+        BotCommand("beans", "list your beans"),
+        BotCommand("history", "show recent brews"),
+        BotCommand("setup", "register your grinder, machine and dripper"),
         BotCommand("start", "show the welcome message"),
         BotCommand("help", "show available commands"),
         BotCommand("ping", "check if the bot is alive"),
