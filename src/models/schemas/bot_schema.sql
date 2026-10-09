@@ -59,3 +59,10 @@ CREATE TABLE IF NOT EXISTS brews (
 
 CREATE INDEX IF NOT EXISTS idx_brews_user ON brews (user_id, id);
 CREATE INDEX IF NOT EXISTS idx_brews_bean_method ON brews (user_id, bean_id, method);
+
+CREATE TABLE IF NOT EXISTS brew_advice (
+    brew_id INTEGER PRIMARY KEY REFERENCES brews (id) ON DELETE CASCADE,
+    advice TEXT NOT NULL,
+    model TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);

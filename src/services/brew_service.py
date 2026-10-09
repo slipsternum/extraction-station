@@ -69,6 +69,17 @@ class BrewService:
             return brew
         return None
 
+    @staticmethod
+    def nudge_grind(grind: Optional[float], extraction: Optional[str]) -> tuple[Optional[float], str]:
+        """Rule of thumb: one step finer after under-extraction, one coarser after over."""
+        if grind is None:
+            return None, ""
+        if extraction == "under":
+            return max(grind - GRIND_STEP, 0), ", under-extracted. Try finer."
+        if extraction == "over":
+            return grind + GRIND_STEP, ", over-extracted. Try coarser."
+        return grind, "."
+
     @classmethod
     def suggest_grind(cls, ctx: dict[str, Any], bean_id: int, method: str) -> tuple[Optional[float], str]:
         """Suggest a grind setting from history, nudged by the last extraction verdict."""
@@ -76,16 +87,25 @@ class BrewService:
         lookup = dict(method=method, column="grind_setting", grinder_id=grinder_id, match_grinder=True)
         same = cls._last(ctx, bean_id=bean_id, **lookup)
         if same:
-            last = same["grind_setting"]
-            if same["extraction"] == "under":
-                return last - GRIND_STEP, f"Last time with these beans: {_fmt(last)}, under-extracted. Try finer."
-            if same["extraction"] == "over":
-                return last + GRIND_STEP, f"Last time with these beans: {_fmt(last)}, over-extracted. Try coarser."
-            return last, f"Last time with these beans: {_fmt(last)}."
+            value, verdict = cls.nudge_grind(same["grind_setting"], same["extraction"])
+            return value, f"Last time with these beans: {_fmt(same['grind_setting'])}{verdict}"
         other = cls._last(ctx, **lookup)
         if other:
             return other["grind_setting"], f"First time with these beans. Your last one used {_fmt(other['grind_setting'])}."
         return None, "No history yet. Type your grind setting."
+
+    @staticmethod
+    def ai_plan(ctx: dict[str, Any], bean_id: int, method: str) -> Optional[dict[str, Any]]:
+        """AI advice from the last brew of these beans and method; grind dropped if the grinder changed."""
+        last = next((b for b in ctx["recent"] if b["bean_id"] == bean_id and b["method"] == method), None)
+        advice = (last or {}).get("ai_advice")
+        if not advice:
+            return None
+        grinder_id = (ctx["equipment"].get("grinder") or {}).get("id")
+        if last["grinder_id"] != grinder_id:
+            recipe = {k: v for k, v in advice.get("next_brew", {}).items() if k != "grind_setting"}
+            advice = {**advice, "next_brew": recipe}
+        return advice
 
     @classmethod
     def suggest_values(
@@ -96,9 +116,15 @@ class BrewService:
         last = cls._last(ctx, method=method, column=field.column, bean_id=draft["bean_id"])
         last = last or cls._last(ctx, method=method, column=field.column)
         options: list[tuple[str, float]] = []
+        plan = cls.ai_plan(ctx, draft["bean_id"], method) or {}
+        planned = plan.get("next_brew", {}).get(field.column)
+        if planned is not None:
+            value = round(planned / field.scale, 2)
+            options.append((f"🤖 {_fmt(value)}", value))
         if last:
             value = round(last[field.column] / field.scale, 2)
-            options.append((f"{_fmt(value)} (last)", value))
+            if all(existing != value for _, existing in options):
+                options.append((f"{_fmt(value)} (last)", value))
         dose = draft.get("dose_g")
         if field.ratio_of_dose and dose:
             value = round(dose * field.ratio_of_dose, 1)

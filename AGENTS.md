@@ -6,7 +6,7 @@ consistent with the conventions below.
 ## What this is
 
 Extraction Station: a Telegram bot for logging coffee brews and dialling in (equipment setup,
-bean bags read from photos by an LLM, and a button-driven `/brew` log). It is built on an async
+bean bags read from photos by an LLM, a button-driven `/brew` log, and LLM tips for the next brew). It is built on an async
 **pyTelegramBotAPI** (`telebot`) template with a **FastAPI** app for webhook mode. It can run in two modes:
 
 - **Polling** (default, `USE_POLLING=true`) — long-polls Telegram; best for development.
@@ -35,7 +35,7 @@ src/
     states.py               Conversation states
   models/                   Dataclasses, brew methods/equipment kinds (coffee.py), SQL schema
   repositories/             Async SQLite data access (equipment, beans, brews)
-  services/                 Business logic: notification, llm, setup, bean, brew
+  services/                 Business logic: notification, llm, setup, bean, brew, advice
   utils/                    User-facing text (text.py) and input parsing (parsing.py)
 ```
 
@@ -80,7 +80,12 @@ documented in `README.md` and `.env.example`.
 - **Editing messages**: use `notifications.edit_message(message, ...)`, which edits the caption
   for photo messages and the text otherwise.
 - **LLM calls** go through `LLMService` (OpenAI SDK, Chat Completions, configurable
-  `OPENAI_BASE_URL`/`OPENAI_MODEL`); it is disabled when `OPENAI_MODEL` is unset.
+  `OPENAI_BASE_URL`/`OPENAI_MODEL`); it is disabled when `OPENAI_MODEL` is unset. Every LLM
+  feature must degrade gracefully: catch failures, log a warning, and keep the core flow working.
+- **Brew advice** (`AdviceService`) runs after a brew is saved, never inside the button flow. It
+  sends this brew plus the bean/method history (with earlier advice) and stores the normalised
+  JSON in `brew_advice`. `BrewService.ai_plan` reads it back into the next `/brew` context, where
+  its `next_brew` values become 🤖 options; grind is dropped if the default grinder has changed.
 
 ## Common extension points
 

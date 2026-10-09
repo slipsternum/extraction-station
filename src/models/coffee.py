@@ -110,6 +110,14 @@ def _notes(raw: Any) -> list[str]:
     return [str(n) for n in value] if isinstance(value, list) else []
 
 
+def _advice(raw: Any) -> Optional[dict[str, Any]]:
+    try:
+        value = json.loads(raw) if raw else None
+    except (TypeError, ValueError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
 @dataclass(slots=True)
 class Equipment:
     id: int
@@ -180,6 +188,7 @@ class Brew:
     photo_file_id: Optional[str]
     created_at: str
     bean_name: Optional[str] = None
+    ai_advice: Optional[dict[str, Any]] = None
 
     @classmethod
     def from_row(cls, row: Mapping[str, Any]) -> "Brew":
@@ -205,6 +214,7 @@ class Brew:
             photo_file_id=row["photo_file_id"],
             created_at=row["created_at"],
             bean_name=row["bean_name"] if "bean_name" in keys else None,
+            ai_advice=_advice(row["ai_advice"]) if "ai_advice" in keys else None,
         )
 
 

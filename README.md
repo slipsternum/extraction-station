@@ -10,6 +10,11 @@ pyTelegramBotAPI + FastAPI template.
   (suggested from your last brew with the same beans, nudged finer/coarser if it was
   under/over-extracted) → dose/yield/water/temp/time → photo → extraction → clarity → tasting notes
   (suggested from the bag) → rating → comment → save.
+- **AI next-brew tips**: after you save, the LLM reads this brew and your earlier brews of the same
+  beans and method (tasting notes, clarity, ratio, time, roast age, comments and the advice it gave
+  before) and replies with a diagnosis, one primary change with a full recipe, other ways in and
+  what to taste for. The next `/brew` with those beans shows the tip and offers its numbers as 🤖
+  buttons alongside the finer/coarser rule of thumb.
 - **/history** and **/beans**: recent brews, and your bags (archive a bag when it's finished).
 
 The in-progress brew lives in conversation state; nothing is written to the database until you
@@ -100,7 +105,7 @@ Minimum configuration:
 ```env
 BOT_TOKEN=your_bot_token_here
 ADMIN_IDS=your_telegram_user_id   # every handler is admin-only
-OPENAI_MODEL=your_vision_model    # optional: enables bag-photo label reading
+OPENAI_MODEL=your_vision_model    # optional: enables label reading and brew tips
 OPENAI_API_KEY=your_api_key
 USE_POLLING=true
 ```
@@ -153,12 +158,14 @@ python main.py
 
 ### LLM Configuration
 
-Bean label extraction uses the OpenAI SDK's Chat Completions API, so any OpenAI-compatible
-provider with a vision model works (OpenAI, OpenRouter, a local server, …).
+Bean label extraction and next-brew tips both use the same model through the OpenAI SDK's Chat
+Completions API, so any OpenAI-compatible provider with a vision model works (OpenAI, OpenRouter,
+a local server, …). Without `OPENAI_MODEL`, beans are entered by hand and `/brew` falls back to
+the rule-of-thumb grind suggestion.
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `OPENAI_MODEL` | Vision-capable model ID; leave empty to disable extraction | - | No |
+| `OPENAI_MODEL` | Vision-capable model ID; leave empty to disable extraction and tips | - | No |
 | `OPENAI_API_KEY` | API key for the provider | - | No |
 | `OPENAI_BASE_URL` | Base URL of an OpenAI-compatible API | OpenAI | No |
 | `OPENAI_TIMEOUT_SECONDS` | Request timeout | `60` | No |
@@ -190,7 +197,7 @@ Python 3.13. Key versions:
 |---------|---------|----------|
 | `pyTelegramBotAPI` | 4.37.0 | Async Telegram bot, conversation states |
 | `fastapi` / `uvicorn` | 0.143.0 / 0.54.0 | Webhook mode |
-| `openai` | 3.27.0 | Bean label extraction (Chat Completions) |
+| `openai` | 3.27.0 | Label extraction and brew tips (Chat Completions) |
 | `aiosqlite` | 0.22.1 | Async SQLite |
 | `aiofiles` | 25.1.0 | Required by telebot's pickle state storage |
 | `pydantic` | 2.14.0 | FastAPI models |
@@ -386,7 +393,7 @@ Certificates will be auto-generated if paths are set but files don't exist.
 
 All commands are admin-only (gated by the `isadmin` filter):
 
-- `/brew` - Log a brew
+- `/brew` - Log a brew; AI tips for the next one follow the save
 - `/newbean` - Add a bag of beans from a photo or text
 - `/beans` - List and archive your beans
 - `/history` - Show recent brews

@@ -21,6 +21,7 @@ from src.repositories.async_sqlite_adapter import AsyncSQLiteAdapter
 from src.repositories.bean_repository import BeanRepository
 from src.repositories.brew_repository import BrewRepository
 from src.repositories.equipment_repository import EquipmentRepository
+from src.services.advice_service import AdviceService
 from src.services.bean_service import BeanService
 from src.services.brew_service import BrewService
 from src.services.llm_service import LLMService
@@ -46,6 +47,7 @@ class BotContext:
     setup: SetupService
     beans: BeanService
     brews: BrewService
+    advice: AdviceService
 
 
 def _ensure_directories() -> None:
@@ -96,7 +98,7 @@ async def bootstrap_services(bot: AsyncTeleBot) -> BotContext:
     brew_repo = BrewRepository(adapter)
 
     if not llm.enabled:
-        logger.warning("OPENAI_MODEL not set; bean label extraction is disabled.")
+        logger.warning("OPENAI_MODEL not set; bean label extraction and brew tips are disabled.")
     logger.info("Services and repositories initialised.")
 
     return BotContext(
@@ -107,6 +109,7 @@ async def bootstrap_services(bot: AsyncTeleBot) -> BotContext:
         setup=SetupService(equipment_repo),
         beans=BeanService(bot, bean_repo, llm),
         brews=BrewService(bean_repo, brew_repo, equipment_repo),
+        advice=AdviceService(llm, brew_repo),
     )
 
 
@@ -134,6 +137,7 @@ def register_handlers(context: BotContext) -> None:
         bot,
         notifications=context.notifications,
         brews=context.brews,
+        advice=context.advice,
     )
 
 

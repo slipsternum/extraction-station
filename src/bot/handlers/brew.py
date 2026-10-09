@@ -7,8 +7,10 @@ from telebot.states import State
 from telebot.states.asyncio.context import StateContext as AsyncStateContext
 
 from src.bot.keyboards import Button, callback_arg, callback_prefix, chunk, inline, is_plain_text
+from src.core.logging import logger
 from src.core.states import BrewStates
 from src.models.coffee import BREW_METHODS, CLARITY_LABELS, EXTRACTION_LABELS
+from src.services.advice_service import AdviceService
 from src.services.brew_service import GRIND_STEP, BrewService
 from src.services.notification_service import NotificationService
 from src.utils.parsing import parse_number, split_notes
@@ -27,6 +29,7 @@ def register_brew_handlers(
     *,
     notifications: NotificationService,
     brews: BrewService,
+    advice: AdviceService,
 ) -> None:
 
     async def load(state: AsyncStateContext) -> tuple[dict[str, Any], dict[str, Any], Optional[int]]:
@@ -75,18 +78,22 @@ def register_brew_handlers(
 
     async def step_grind(chat_id, state, draft, ctx, call=None):
         suggestion, reason = BrewService.suggest_grind(ctx, draft["bean_id"], draft["method"])
+        plan = BrewService.ai_plan(ctx, draft["bean_id"], draft["method"]) or {}
+        ai_grind = plan.get("next_brew", {}).get("grind_setting")
         rows: list[list[Button]] = []
+        values: list[float] = []
         if suggestion is not None:
-            values = [suggestion + GRIND_STEP * offset for offset in (-2, -1, 0, 1, 2)]
-            rows.append(
-                [
-                    (f"• {_num(v)} •" if v == suggestion else _num(v), f"brew:grind:{_num(v)}")
-                    for v in values
-                    if v >= 0
-                ]
-            )
+            values = [v for v in (suggestion + GRIND_STEP * o for o in (-2, -1, 0, 1, 2)) if v >= 0]
+            labels = {v: f"• {_num(v)} •" if v == suggestion else _num(v) for v in values}
+            if ai_grind in labels:
+                labels[ai_grind] = f"🤖 {_num(ai_grind)}"
+            rows.append([(labels[v], f"brew:grind:{_num(v)}") for v in values])
+        if ai_grind is not None and ai_grind not in values:
+            rows.append([(f"🤖 {_num(ai_grind)} (AI tip)", f"brew:grind:{_num(ai_grind)}")])
         rows.append(CANCEL_ROW)
-        text = BrewText.grind(draft, ctx, reason, has_options=suggestion is not None)
+        text = BrewText.grind(
+            draft, ctx, reason, has_options=len(rows) > 1, ai_tip=plan.get("primary_change")
+        )
         await render(chat_id, state, BrewStates.grind, draft, text, inline(rows), call)
 
     async def step_param(chat_id, state, draft, ctx, call=None):
@@ -325,10 +332,23 @@ def register_brew_handlers(
 
     @on_button("brew:save", BrewStates.review)
     async def on_save(call, state, draft, ctx):
-        await brews.save(call.from_user.id, draft)
+        brew_id = await brews.save(call.from_user.id, draft)
         await state.delete()
         text = BrewText.summary(draft, ctx, header=BrewText.saved())
         await notifications.edit_message(call.message, text)
+        if advice.enabled:
+            await send_advice(call.message.chat.id, call.from_user.id, brew_id, draft, ctx)
+
+    async def send_advice(chat_id: int, user_id: int, brew_id: int, draft, ctx) -> None:
+        """Post a "thinking" message, then replace it with the LLM's next-brew tips."""
+        notice = await notifications.send_message(chat_id, BrewText.thinking())
+        try:
+            tips = await advice.advise(user_id, brew_id, draft, ctx)
+            text = BrewText.advice(tips, draft["method"])
+        except Exception as exc:
+            logger.warning("Brew advice failed for brew %s: %s", brew_id, exc, exc_info=exc)
+            text = BrewText.advice_failed()
+        await notifications.edit_message_text(chat_id, notice.message_id, text)
 
     @bot.callback_query_handler(func=callback_prefix("brew:discard"), isadmin=True)
     async def on_discard(call: types.CallbackQuery, state: AsyncStateContext):

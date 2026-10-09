@@ -70,7 +70,7 @@ class HelpText:
     def help_message() -> str:
         return (
             "Available commands:\n"
-            "- /brew: log a brew (suggests your grind from history)\n"
+            "- /brew: log a brew, then get AI tips for the next one\n"
             "- /newbean: add a bag of beans from a photo or text\n"
             "- /beans: list and archive your beans\n"
             "- /history: your recent brews\n"
@@ -207,7 +207,14 @@ class BrewText:
         return f"Beans: {BrewText._bean_line(bean)}\n\nBrew method?"
 
     @staticmethod
-    def grind(draft: Mapping[str, Any], ctx: Mapping[str, Any], reason: str, *, has_options: bool) -> str:
+    def grind(
+        draft: Mapping[str, Any],
+        ctx: Mapping[str, Any],
+        reason: str,
+        *,
+        has_options: bool,
+        ai_tip: Optional[str] = None,
+    ) -> str:
         method = BREW_METHODS[draft["method"]]
         grinder = (ctx["equipment"].get("grinder") or {}).get("name", "grinder")
         brewer = ctx["equipment"].get(method.equipment_kind or "")
@@ -218,6 +225,7 @@ class BrewText:
         return (
             f"<b>{method.label}</b> · {gear}{missing}\n\n"
             f"🎚 <b>Grind setting</b> (lower = finer)\n{_e(reason)}"
+            + (f"\n\n🤖 <i>Last time's tip: {_e(ai_tip)}</i>" if ai_tip else "")
             + ("\n\nTap one or type a value." if has_options else "")
         )
 
@@ -301,6 +309,33 @@ class BrewText:
     @staticmethod
     def saved() -> str:
         return "💾 <b>Brew saved</b>"
+
+    @staticmethod
+    def thinking() -> str:
+        return "🤖 Thinking about your next brew…"
+
+    @staticmethod
+    def advice_failed() -> str:
+        return "🤖 I couldn't put together tips this time. Your brew is saved."
+
+    @staticmethod
+    def advice(advice: Mapping[str, Any], method_key: str) -> str:
+        method = BREW_METHODS[method_key]
+        lines = ["🤖 <b>Next brew</b>"]
+        if advice.get("diagnosis"):
+            lines += ["", f"<i>{_e(advice['diagnosis'])}</i>"]
+        lines += ["", f"➡️ <b>Try:</b> {_e(advice['primary_change'])}"]
+        recipe = advice.get("next_brew") or {}
+        parts = [f"Grind {recipe['grind_setting']:g}"] if recipe.get("grind_setting") is not None else []
+        parts += [f"{f.label} {format_value(recipe[f.column], f)}" for f in method.fields if recipe.get(f.column) is not None]
+        if parts:
+            lines.append(f"Recipe: {' · '.join(parts)}")
+        if advice.get("alternatives"):
+            lines += ["", "<b>Other ways in:</b>", *(f"• {_e(a)}" for a in advice["alternatives"])]
+        if advice.get("taste_for"):
+            lines += ["", f"👅 <b>Taste for:</b> {_e(advice['taste_for'])}"]
+        lines += ["", "<i>I'll bring this up on your next /brew with these beans.</i>"]
+        return "\n".join(lines)
 
     @staticmethod
     def discarded() -> str:

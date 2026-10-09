@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional
 
 from src.models.coffee import BREW_COLUMNS, Brew
 from src.repositories.async_sqlite_adapter import AsyncSQLiteAdapter
@@ -30,17 +30,38 @@ class BrewRepository:
         """Return the most recent brew for every (bean, method, grinder) combination."""
         rows = await self.db.execute(
             """
-            SELECT * FROM brews
-            WHERE id IN (
+            SELECT brews.*, brew_advice.advice AS ai_advice FROM brews
+            LEFT JOIN brew_advice ON brew_advice.brew_id = brews.id
+            WHERE brews.id IN (
                 SELECT MAX(id) FROM brews WHERE user_id = ?
                 GROUP BY bean_id, method, grinder_id
             )
-            ORDER BY id DESC
+            ORDER BY brews.id DESC
             """,
             (user_id,),
             fetchall=True,
         )
         return [Brew.from_row(row) for row in rows]
+
+    async def history(self, user_id: int, bean_id: int, method: str, limit: int = 6) -> list[Brew]:
+        """Most recent brews of one bean with one method, newest first, with their advice."""
+        rows = await self.db.execute(
+            """
+            SELECT brews.*, brew_advice.advice AS ai_advice FROM brews
+            LEFT JOIN brew_advice ON brew_advice.brew_id = brews.id
+            WHERE brews.user_id = ? AND brews.bean_id = ? AND brews.method = ?
+            ORDER BY brews.id DESC LIMIT ?
+            """,
+            (user_id, bean_id, method, limit),
+            fetchall=True,
+        )
+        return [Brew.from_row(row) for row in rows]
+
+    async def save_advice(self, brew_id: int, advice: Mapping[str, Any], model: Optional[str]) -> None:
+        await self.db.execute(
+            "INSERT OR REPLACE INTO brew_advice (brew_id, advice, model) VALUES (?, ?, ?)",
+            (brew_id, json.dumps(advice), model),
+        )
 
     async def recent(self, user_id: int, limit: int = 10) -> list[Brew]:
         rows = await self.db.execute(
