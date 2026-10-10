@@ -108,8 +108,18 @@ schemas under `src/models/`, repositories in `src/repositories/`, and API routes
 ## Dependencies
 
 `requirements.txt` pins every package, direct and transitive, as one resolved set, tested on
-Python 3.13. Don't bump a single pin by hand. Re-resolve the direct dependencies in a fresh venv
-instead (see README → Dependencies), run `pip check`, then verify as below. Known constraints:
+Python 3.13. Don't bump a single pin by hand. Re-resolve the direct dependencies together in a
+fresh venv, run `pip check`, then verify as below:
+
+```bash
+python -m venv .venv-upgrade
+.venv-upgrade/bin/pip install pyTelegramBotAPI fastapi uvicorn aiohttp aiosqlite aiofiles \
+    loguru python-dotenv openai requests
+.venv-upgrade/bin/pip check
+.venv-upgrade/bin/pip freeze > requirements.txt   # then re-add colorama and win32_setctime
+```
+
+Known constraints:
 
 - `aiofiles` must stay installed: `StatePickleStorage` raises at startup without it.
 - `multidict` is capped below 7 by `aiohttp`.
