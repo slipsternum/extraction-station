@@ -86,9 +86,9 @@ documented in `README.md` and `.env.example`.
   sends this brew plus the bean/method history (with earlier advice) and stores the normalised
   JSON in `brew_advice`. `BrewService.ai_plan` reads it back into the next `/brew` context, where
   its `next_brew` values become 🤖 options; grind is dropped if the default grinder has changed.
-- **After Save** the order is: save → tips (`AdviceService`) → progress card (`ProgressService`,
-  enabled by `PROGRESS_CHAT_ID`), so the card can include the AI's next step. Each step catches its
-  own failures. To send into a forum topic, pass `message_thread_id=` to the `NotificationService`
+- **After Save** the order is: save → progress card (`ProgressService`, enabled by
+  `PROGRESS_CHAT_ID`) → tips (`AdviceService`). AI tips go only to the user's private chat, never
+  into the progress card. Each step catches its own failures. To send into a forum topic, pass `message_thread_id=` to the `NotificationService`
   send methods; `send_media_group` posts albums (caption on the first item).
 
 ## Common extension points
@@ -108,8 +108,18 @@ schemas under `src/models/`, repositories in `src/repositories/`, and API routes
 ## Dependencies
 
 `requirements.txt` pins every package, direct and transitive, as one resolved set, tested on
-Python 3.13. Don't bump a single pin by hand. Re-resolve the direct dependencies in a fresh venv
-instead (see README → Dependencies), run `pip check`, then verify as below. Known constraints:
+Python 3.13. Don't bump a single pin by hand. Re-resolve the direct dependencies together in a
+fresh venv, run `pip check`, then verify as below:
+
+```bash
+python -m venv .venv-upgrade
+.venv-upgrade/bin/pip install pyTelegramBotAPI fastapi uvicorn aiohttp aiosqlite aiofiles \
+    loguru python-dotenv openai requests
+.venv-upgrade/bin/pip check
+.venv-upgrade/bin/pip freeze > requirements.txt   # then re-add colorama and win32_setctime
+```
+
+Known constraints:
 
 - `aiofiles` must stay installed: `StatePickleStorage` raises at startup without it.
 - `multidict` is capped below 7 by `aiohttp`.

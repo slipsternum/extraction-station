@@ -35,12 +35,11 @@ class ProgressService:
         brew_id: int,
         draft: dict[str, Any],
         ctx: dict[str, Any],
-        advice: Optional[dict[str, Any]] = None,
     ) -> None:
         attempt = await self.brews.count(user_id, draft["bean_id"], draft["method"])
         history = await self.brews.history(user_id, draft["bean_id"], draft["method"], limit=2)
         previous = next((brew for brew in history if brew.id != brew_id), None)
-        caption = ProgressText.caption(draft, ctx, attempt=attempt, previous=previous, advice=advice)
+        caption = ProgressText.caption(draft, ctx, attempt=attempt, previous=previous)
 
         bean = next((b for b in ctx["beans"] if b["id"] == draft["bean_id"]), {})
         photos = [p for p in (draft.get("photo_file_id"), bean.get("photo_file_id")) if p]

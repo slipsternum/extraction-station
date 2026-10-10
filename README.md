@@ -1,443 +1,199 @@
-# Extraction Station
+# ☕ Extraction Station
 
-A Telegram bot for logging coffee brews and dialling in, built on an async
-pyTelegramBotAPI + FastAPI template.
+A personal Telegram bot for logging coffee brews and dialling in.
 
-- **/setup**: register your grinder, espresso machine and dripper once; every brew uses them by default.
-- **/newbean**: send a photo of a bag. An LLM reads the label (name, roaster, origin, process, roast
-  level, roast date, tasting notes) and you confirm or edit it before saving.
-- **/brew**: a button-driven log: beans (defaults to the last ones you used) → method → grind
-  (suggested from your last brew with the same beans, nudged finer/coarser if it was
-  under/over-extracted) → dose/yield/water/temp/time → photo → extraction → clarity → tasting notes
-  (suggested from the bag) → rating → comment → save.
-- **AI next-brew tips**: after you save, the LLM reads this brew and your earlier brews of the same
-  beans and method (tasting notes, clarity, ratio, time, roast age, comments and the advice it gave
-  before) and replies with a diagnosis, one primary change with a full recipe, other ways in and
-  what to taste for. The next `/brew` with those beans shows the tip and offers its numbers as 🤖
-  buttons alongside the finer/coarser rule of thumb.
-- **Progress posts**: after each brew, the bot posts a progress card to a chat you choose (a group,
-  a forum topic or a channel): your cup and bag photos as an album, the attempt number for those
-  beans and method, grind, ratio, time, the verdict and notes, changes from the previous attempt
-  ("was 12") and the AI's next step. Run `/chatid` in that chat or topic to get the IDs to configure.
-- **/history** and **/beans**: recent brews, and your bags (archive a bag when it's finished).
+Snap a photo of a new bag and the bot reads the label. Log each brew with a few taps, and get AI
+tips on what to change next time. If you like, every brew can also be posted as a progress card to
+a group or channel. It's built for working through a grinder, an espresso machine and a pour-over
+dripper, one bag at a time.
 
-The in-progress brew lives in conversation state; nothing is written to the database until you
-tap **Save**. All handlers are admin-only, so set `ADMIN_IDS` to your own Telegram user ID.
-
-## Features
-
-- **Async/Await Support** - Built on pyTelegramBotAPI's async implementation
-- **Dual Mode** - Run in polling mode (development) or webhook mode (production)
-- **FastAPI Integration** - RESTful API endpoints alongside your bot
-- **Database Ready** - SQLite with async support via aiosqlite
-- **State Management** - Built-in conversation state handling
-- **Rate Limiting** - Configurable rate limits for commands and callbacks
-- **Admin Filter** - Gate commands to administrators via the `isadmin` filter
-- **Telegram Logging** - Optional log forwarding to Telegram channel
-- **Auto SSL Certs** - Automatic self-signed certificate generation for webhooks
-- **Clean Architecture** - Organized structure with separation of concerns
-
-## Project Structure
+## How it works
 
 ```
-├── src/
-│   ├── api/                   # FastAPI application
-│   │   ├── routers/           # API route handlers
-│   │   ├── app.py             # FastAPI app and startup
-│   │   ├── certs.py           # SSL certificate management
-│   │   └── dependencies.py    # FastAPI dependencies
-│   │   
-│   ├── bot/                   # Telegram bot
-│   │   ├── handlers/          # Message and command handlers
-│   │   ├── commands.py        # Bot command definitions
-│   │   ├── filters.py         # Custom message filters
-│   │   └── middlewares.py     # Rate limiting and middleware
-│   │   
-│   ├── core/                  # Core functionality
-│   │   ├── bootstrap.py       # Bot initialization
-│   │   ├── config.py          # Configuration management
-│   │   ├── logging.py         # Logging system
-│   │   └── states.py          # Conversation states
-│   │   
-│   ├── models/                # Data models
-│   │   └── schemas/           # Database schemas
-│   │   
-│   ├── repositories/          # Data access layer
-│   ├── services/              # Business logic
-│   └── utils/                 # Utility functions
-│
-├── main.py                    # Application entry point
-├── requirements.txt           # Python dependencies
-├── .env.example               # Environment variables template
-├── AGENTS.md                  # Guide for agent-assisted development
-└── README.md
+/setup    register your gear once         DF54 · Gaggia Classic Pro · Hario V60
+/newbean  photo of the bag → label read   HoneyBloom · Ethiopia Yirgacheffe · natural · roasted 5 Oct
+/brew     tap through the brew            beans → method → grind → recipe → photo → tasting → save
+          ↳ progress card                 posted to your group/topic
+          ↳ 🤖 next-brew tips             sent to you privately
 ```
 
-## Quick Start
+### Beans
 
-### 1. Clone and Setup
+Send `/newbean` and a photo of the bag. A vision model reads the name, roaster, origin, process,
+varietal, roast level, roast date and tasting notes. You confirm or edit each field before saving,
+which matters most for handwritten roast dates. You can also type the details, or fill them in by
+hand if no model is configured.
+
+### Brewing
+
+`/brew` is one message that updates as you tap:
+
+1. **Beans**: defaults to whatever you brewed last.
+2. **Method**: espresso, pour-over or cold brew, using your gear from `/setup`.
+3. **Grind**: suggested from your last brew of those beans on that grinder, one step finer if it
+   was under-extracted or coarser if over.
+4. **Recipe**: dose, then yield or water, then temperature and time. Suggestions come from your
+   last brew, a standard ratio, or the AI's last tip (marked 🤖).
+5. **Photo** of the cup (optional).
+6. **Tasting**: under/good/over extraction, clarity, tasting notes (the bag's notes come first as
+   buttons) and a rating.
+7. **Save**: the draft lives in conversation state until this point, so nothing is written to the
+   database before you save.
+
+### Next-brew tips
+
+After you save, the AI looks at this brew and your history with the same beans and method. That
+includes tasting notes, clarity, ratio, time, roast age, your comments, and whether its earlier
+advice helped. It replies privately with:
+
+- a short diagnosis of the cup
+- **one** change to make next, with a full recipe
+- other ways in, and what to taste for
+
+The next `/brew` with those beans brings the tip back and offers its numbers as 🤖 buttons.
+
+### Progress posts
+
+Point the bot at a group, forum topic or channel, and each brew is posted there as a card. It
+shows your cup and bag photos, the attempt number for those beans and method, and the recipe, with
+anything changed since the last attempt marked:
+
+```
+Cold brew · attempt 2
+☕ HoneyBloom · roasted 5 Oct (7 days ago)
+⚙️ 82 (was 85) · DF54
+💧 1:10 (45g / 450g) (was 1:12)
+⏰ 19h
+
+👌 Well extracted · clean cup · ★★★★★
+👅 floral, honey
+```
+
+AI tips never appear in progress posts.
+
+## Quick start
+
+You'll need Python 3.13, a bot token from [@BotFather](https://t.me/BotFather), and optionally an
+API key for an OpenAI-compatible vision model.
 
 ```bash
-# Clone the repository
-git clone https://github.com/slipsternum/pyTelegramBotAPI-async-telebot-template <destination-folder>
-cd <destination-folder>
-
-# Create virtual environment
+git clone https://github.com/slipsternum/extraction-station.git
+cd extraction-station
 python -m venv .venv
-
-# Activate virtual environment
-# Windows:
-.venv\Scripts\activate
-# Linux/Mac:
-source .venv/bin/activate
-
-# Install dependencies
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-### 2. Configure Environment
-
-```bash
-# Copy example environment file
 cp .env.example .env
-
-# Edit .env and add your bot token
-# Get your token from @BotFather on Telegram
 ```
 
-Minimum configuration:
+Fill in `.env`:
+
 ```env
-BOT_TOKEN=your_bot_token_here
-ADMIN_IDS=your_telegram_user_id   # every handler is admin-only
-OPENAI_MODEL=your_vision_model    # optional: enables label reading and brew tips
-OPENAI_API_KEY=your_api_key
-USE_POLLING=true
+BOT_TOKEN=123456:ABC...            # from @BotFather
+ADMIN_IDS=your_telegram_user_id    # the bot only answers these users
+OPENAI_MODEL=your_vision_model     # optional: label reading + tips
+OPENAI_API_KEY=sk-...
 ```
 
-The template uses `./.data/` directory for database and state files by default.
-
-### 3. Run the Bot
+Then run the bot and send it `/start`:
 
 ```bash
 python main.py
 ```
 
-## Configuration
-
-### Bot Configuration
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `BOT_TOKEN` | Bot token from @BotFather | - | Yes |
-| `USE_POLLING` | Use polling mode (true) or webhook (false) | `true` | No |
-
-### Logging Configuration
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `LOG_LEVEL` | Log level (DEBUG, INFO, WARNING, ERROR) | `INFO` | No |
-| `LOGGING_BOT_TOKEN` | Separate bot token for sending logs | - | No |
-| `LOGGER_CHAT_ID` | Channel ID for log messages | - | No |
-
-### Database Configuration
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `SQLITE_DB_PATH` | Path to SQLite database file | `./.data/data.sqlite` | No |
-| `SQLITE_SCHEMA_PATH` | Path to SQL schema file | `./src/models/schemas/bot_schema.sql` | No |
-| `STATE_STORAGE_PATH` | Path to state storage file | `./.data/states.pkl` | No |
-
-### Admin Configuration
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `ADMIN_IDS` | Comma-separated admin user IDs | - | No |
-
-### Rate Limiting
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `RATE_LIMIT_COMMAND_SECONDS` | Seconds between commands per user | `0` | No |
-| `RATE_LIMIT_CALLBACK_SECONDS` | Seconds between callbacks per user | `0` | No |
-
-### LLM Configuration
-
-Bean label extraction and next-brew tips both use the same model through the OpenAI SDK's Chat
-Completions API, so any OpenAI-compatible provider with a vision model works (OpenAI, OpenRouter,
-a local server, …). Without `OPENAI_MODEL`, beans are entered by hand and `/brew` falls back to
-the rule-of-thumb grind suggestion.
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `OPENAI_MODEL` | Vision-capable model ID; leave empty to disable extraction and tips | - | No |
-| `OPENAI_API_KEY` | API key for the provider | - | No |
-| `OPENAI_BASE_URL` | Base URL of an OpenAI-compatible API | OpenAI | No |
-| `OPENAI_TIMEOUT_SECONDS` | Request timeout | `60` | No |
-
-### Progress Posts
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `PROGRESS_CHAT_ID` | Chat to post progress cards to (`-100…` group/channel ID or `@channelname`); empty disables | - | No |
-| `PROGRESS_THREAD_ID` | Forum topic ID within that chat | - | No |
-
-The bot must be a member of that chat (an admin, for channels). Send `/chatid` inside the target
-chat or topic and it replies with both values. If a post fails, the bot tells you in your DM.
-
-### Webhook Configuration
-
-Only needed if `USE_POLLING=false`:
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `WEBHOOK_HOST` | Public domain/IP for webhook | - | Yes* |
-| `WEBHOOK_PORT` | External port (443, 80, 88, 8443) | `8443` | No |
-| `WEBHOOK_LISTEN` | Internal interface to bind | `0.0.0.0` | No |
-| `WEBHOOK_LISTEN_PORT` | Internal port to listen on | `8443` | No |
-| `WEBHOOK_SECRET_TOKEN` | Secret token for webhook verification | - | No |
-| `WEBHOOK_PATH_PREFIX` | URL path prefix | - | No |
-| `WEBHOOK_SSL_CERT` | SSL certificate path | - | No** |
-| `WEBHOOK_SSL_PRIV` | SSL private key path | - | No** |
-
-\* Required for webhook mode  
-\** Leave empty if using reverse proxy
-
-## Dependencies
-
-`requirements.txt` is a fully pinned set (direct and transitive), resolved together and tested on
-Python 3.13. Key versions:
-
-| Package | Version | Used for |
-|---------|---------|----------|
-| `pyTelegramBotAPI` | 4.37.0 | Async Telegram bot, conversation states |
-| `fastapi` / `uvicorn` | 0.143.0 / 0.54.0 | Webhook mode |
-| `openai` | 3.27.0 | Label extraction and brew tips (Chat Completions) |
-| `aiosqlite` | 0.22.1 | Async SQLite |
-| `aiofiles` | 25.1.0 | Required by telebot's pickle state storage |
-| `pydantic` | 2.14.0 | FastAPI models |
-| `loguru` | 0.7.3 | Logging |
-
-`multidict` stays on 6.x because `aiohttp` requires `multidict<7`. `colorama` and `win32_setctime`
-are Windows-only dependencies of `loguru` and are pinned so the file installs the same everywhere.
-
-### Upgrading
-
-Resolve the direct dependencies together in a fresh environment, then re-pin:
-
-```bash
-python -m venv .venv-upgrade
-.venv-upgrade/bin/pip install pyTelegramBotAPI fastapi uvicorn aiohttp aiosqlite aiofiles \
-    loguru python-dotenv openai requests
-.venv-upgrade/bin/pip check
-.venv-upgrade/bin/pip freeze > requirements.txt   # then re-add colorama and win32_setctime
-```
-
-Then run the checks in [Verifying changes](AGENTS.md#verifying-changes) before committing.
-
-## Development
-
-### Adding New Commands
-
-1. Define commands in `src/bot/commands.py`:
-```python
-user_commands: CommandSet = CommandSet(
-    commands=[
-        BotCommand("mycommand", "description"),
-        # ... existing commands
-    ],
-    scope=BotCommandScope(type="all_private_chats"),
-)
-```
-
-2. Add handler in `src/bot/handlers/general.py`:
-```python
-@bot.message_handler(commands=["mycommand"], isadmin=True, isprivchat=True)
-async def handle_mycommand(message: types.Message, state: AsyncStateContext):
-    await notifications.send_message(
-        message.chat.id,
-        "Your response here"
-    )
-```
-
-For admin-only commands, add the handler in `src/bot/handlers/admin.py` with
-`isadmin=True` and register it in `admin_commands` instead. See `/admin` for a
-working example.
-
-### Adding Conversation States
-
-1. Define state in `src/core/states.py`:
-```python
-class UserStates(StatesGroup):
-    idle = State()
-    waiting_for_input = State()
-```
-
-2. Use in handlers:
-```python
-@bot.message_handler(commands=["start_flow"], isprivchat=True)
-async def start_flow(message: types.Message, state: AsyncStateContext):
-    await state.set(UserStates.waiting_for_input)
-    await notifications.send_message(message.chat.id, "Send me your input:")
-
-@bot.message_handler(state=UserStates.waiting_for_input, content_types=["text"])
-async def handle_input(message: types.Message, state: AsyncStateContext):
-    user_input = message.text
-    # Process input
-    await state.set(UserStates.idle)
-```
-
-### Adding Database Models
-
-1. Define model in `src/models/__init__.py`:
-```python
-@dataclass
-class MyModel:
-    id: int
-    name: str
-    created_at: int
-```
-
-2. Create schema in `src/models/schemas/bot_schema.sql` (or your custom schema file):
-```sql
-CREATE TABLE IF NOT EXISTS my_table (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    created_at INTEGER NOT NULL
-);
-```
-
-You can use a custom schema file by setting `SQLITE_SCHEMA_PATH` in your `.env`.
-
-3. Create repository in `src/repositories/`:
-```python
-class MyRepository:
-    def __init__(self, db: AsyncSQLiteAdapter):
-        self.db = db
-    
-    async def create(self, name: str) -> int:
-        # Implementation
-```
-
-### Adding API Endpoints
-
-Create a new router in `src/api/routers/`:
-```python
-from fastapi import APIRouter
-
-router = APIRouter(tags=["myrouter"])
-
-@router.get("/myendpoint")
-async def my_endpoint():
-    return {"status": "ok"}
-```
-
-Register in `src/api/routers/__init__.py`:
-```python
-from src.api.routers.myrouter import router as my_router
-
-router = APIRouter()
-router.include_router(my_router)
-```
-
-## Deployment
-
-### Polling Mode (Simple)
-
-Best for development and small bots:
-
-```bash
-# Set environment
-USE_POLLING=true
-
-# Run directly
-python main.py
-
-# Or with systemd/supervisor/pm2
-```
-
-### Webhook Mode (Production)
-
-#### Option 1: With Reverse Proxy (Recommended)
-
-Use nginx/Caddy to handle SSL:
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name yourdomain.com;
-    
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-    
-    location / {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-Environment:
-```env
-USE_POLLING=false
-WEBHOOK_HOST=yourdomain.com
-WEBHOOK_PORT=443
-WEBHOOK_LISTEN_PORT=8000
-WEBHOOK_SECRET_TOKEN=your_secret_token
-# Leave SSL cert/key empty - nginx handles it
-```
-
-#### Option 2: Direct HTTPS
-
-Let the bot handle SSL directly:
-
-```env
-USE_POLLING=false
-WEBHOOK_HOST=yourdomain.com
-WEBHOOK_PORT=8443
-WEBHOOK_LISTEN_PORT=8443
-WEBHOOK_SECRET_TOKEN=your_secret_token
-WEBHOOK_SSL_CERT=./certs/cert.pem
-WEBHOOK_SSL_PRIV=./certs/key.pem
-```
-
-Certificates will be auto-generated if paths are set but files don't exist.
+To find your Telegram user ID, message [@userinfobot](https://t.me/userinfobot).
 
 ## Commands
 
-All commands are admin-only (gated by the `isadmin` filter):
+| Command | What it does |
+|---------|--------------|
+| `/brew` | Log a brew; tips for the next one follow the save |
+| `/newbean` | Add a bag of beans from a photo or text |
+| `/beans` | List your beans; archive a bag when it's finished |
+| `/history` | Your last 10 brews |
+| `/setup` | Register your grinder, espresso machine and dripper |
+| `/chatid` | Show the chat and topic IDs for progress posts (send it in that chat) |
+| `/cancel` | Cancel the current flow |
+| `/help` | Show all commands |
 
-- `/brew` - Log a brew; AI tips for the next one follow the save
-- `/newbean` - Add a bag of beans from a photo or text
-- `/beans` - List and archive your beans
-- `/history` - Show recent brews
-- `/setup` - Register your grinder, espresso machine and dripper
-- `/start` - Show welcome message
-- `/help` - Show available commands
-- `/ping` - Check bot health
-- `/cancel` - Cancel current operation
-- `/chatid` - Show the chat and topic IDs for progress posts (send it in that chat)
-- `/admin` - Example admin-only command
+Every command is admin-only. Anyone not in `ADMIN_IDS` is ignored.
+
+## Configuration
+
+All settings live in `.env`; see [`.env.example`](.env.example) for the full list.
+
+### Essentials
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `BOT_TOKEN` | Bot token from @BotFather (required) | - |
+| `ADMIN_IDS` | Comma-separated Telegram user IDs allowed to use the bot | - |
+
+### AI (label reading and tips)
+
+Both features use one model through the OpenAI SDK's Chat Completions API. Any OpenAI-compatible
+provider with a vision model works: OpenAI, OpenRouter, or a local server. If `OPENAI_MODEL` is
+empty, you enter beans by hand and `/brew` uses the rule-of-thumb grind suggestion.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENAI_MODEL` | Vision-capable model ID; empty disables AI features | - |
+| `OPENAI_API_KEY` | API key for the provider | - |
+| `OPENAI_BASE_URL` | Base URL of an OpenAI-compatible API | OpenAI |
+| `OPENAI_TIMEOUT_SECONDS` | Request timeout | `60` |
+
+### Progress posts
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PROGRESS_CHAT_ID` | Group/channel to post to (`-100…` ID or `@channelname`); empty disables | - |
+| `PROGRESS_THREAD_ID` | Forum topic within that chat | - |
+
+To set it up:
+
+1. Add the bot to the group or channel. For a channel, make it an admin.
+2. Send `/chatid` in the target chat or topic, and copy the two lines it replies with into `.env`.
+3. Restart the bot.
+
+If a post fails, the bot tells you why in your private chat. The brew itself is always saved.
+
+### Storage and logging
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SQLITE_DB_PATH` | SQLite database | `./.data/data.sqlite` |
+| `STATE_STORAGE_PATH` | Conversation state (in-progress brews) | `./.data/states.pkl` |
+| `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING` or `ERROR` | `INFO` |
+| `LOGGING_BOT_TOKEN` / `LOGGER_CHAT_ID` | Optional: mirror logs to a Telegram chat | - |
+
+## Running it
+
+**Polling** (the default, `USE_POLLING=true`) is all a personal bot needs: run `python main.py`
+on any machine that stays on, under systemd, pm2 or similar.
+
+**Webhook mode** (`USE_POLLING=false`) serves a FastAPI app under uvicorn instead. Set
+`WEBHOOK_HOST`, `WEBHOOK_PORT`, `WEBHOOK_LISTEN_PORT` and `WEBHOOK_SECRET_TOKEN`. Either put it
+behind a reverse proxy that terminates TLS, or set `WEBHOOK_SSL_CERT` and `WEBHOOK_SSL_PRIV`. If
+those files don't exist, a self-signed certificate is generated for you (this needs `openssl`).
 
 ## Troubleshooting
 
-### Bot doesn't respond
-- Check `BOT_TOKEN` is correct
-- Check your Telegram user ID is in `ADMIN_IDS`; non-admins are ignored silently
-- Verify bot is running: `/ping` should respond with "pong"
-- Check logs for errors
+- **The bot doesn't reply.** Check that your user ID is in `ADMIN_IDS` and that `BOT_TOKEN` is
+  right. `/ping` should answer "pong".
+- **Label reading or tips don't appear.** Check that `OPENAI_MODEL` is set and supports images,
+  then look for warnings in the logs.
+- **Progress posts fail.** The bot must be in the chat (as an admin, for channels) and allowed to
+  post in that topic. The DM it sends you includes Telegram's reason.
+- **Buttons say the brew has ended.** That panel is from a finished or cancelled brew. Start a new
+  one with `/brew`.
 
-### Webhook not working
-- Ensure `WEBHOOK_HOST` is publicly accessible
-- Verify port is one of: 443, 80, 88, 8443
-- Check `WEBHOOK_SECRET_TOKEN` matches
-- Test with polling mode first
+## Development
 
-### Database errors
-- Ensure database directory (`./.data/` by default) exists and is writable
-- Check `SQLITE_DB_PATH` and `SQLITE_SCHEMA_PATH` configuration
-- Verify schema file exists at the specified path
-- Check schema SQL syntax is valid
+The stack is async [pyTelegramBotAPI](https://github.com/eternnoir/pyTelegramBotAPI), SQLite via
+aiosqlite, and the OpenAI SDK, with FastAPI for webhook mode. `requirements.txt` is a fully pinned
+set tested on Python 3.13.
+
+See [AGENTS.md](AGENTS.md) for the code layout, conventions, dependency upgrades and how to verify
+changes.
 
 ## License
 
