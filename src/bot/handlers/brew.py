@@ -69,7 +69,7 @@ def register_brew_handlers(
 
     async def step_bean(chat_id, state, draft, ctx, call=None):
         bean = BrewService.find_bean(ctx, draft["bean_id"])
-        markup = inline([[("✅ Use these", "brew:beanok"), ("🔄 Other beans", "brew:beanswitch")], CANCEL_ROW])
+        markup = inline([[("✅ Use these", "brew:beanok")], [("🔄 Other beans", "brew:beanswitch"), *CANCEL_ROW]])
         await render(chat_id, state, BrewStates.bean, draft, BrewText.confirm_bean(bean), markup, call)
 
     async def step_method(chat_id, state, draft, ctx, call=None):
