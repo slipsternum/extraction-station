@@ -397,7 +397,6 @@ class ProgressText:
         *,
         attempt: int,
         previous: Any = None,
-        advice: Optional[Mapping[str, Any]] = None,
     ) -> str:
         """Progress card caption; changes from the previous attempt are shown as "(was …)"."""
         method = BREW_METHODS[draft["method"]]
@@ -446,8 +445,6 @@ class ProgressText:
             lines.append(f"👅 {_e(', '.join(draft['tasting_notes'][:12]))}")
         if draft.get("comment"):
             lines.append(f"💬 {_e(_short(draft['comment'], 200))}")
-        if advice and advice.get("primary_change"):
-            lines += ["", f"🤖 <b>Next:</b> {_e(_short(advice['primary_change'], 220))}"]
         return "\n".join(lines)
 
     @staticmethod

@@ -18,7 +18,7 @@ pyTelegramBotAPI + FastAPI template.
 - **Progress posts**: after each brew, the bot posts a progress card to a chat you choose (a group,
   a forum topic or a channel): your cup and bag photos as an album, the attempt number for those
   beans and method, grind, ratio, time, the verdict and notes, changes from the previous attempt
-  ("was 12") and the AI's next step. Run `/chatid` in that chat or topic to get the IDs to configure.
+  ("was 12"). The AI's tips stay in your private chat. Run `/chatid` in that chat or topic to get the IDs to configure.
 - **/history** and **/beans**: recent brews, and your bags (archive a bag when it's finished).
 
 The in-progress brew lives in conversation state; nothing is written to the database until you

@@ -86,9 +86,9 @@ documented in `README.md` and `.env.example`.
   sends this brew plus the bean/method history (with earlier advice) and stores the normalised
   JSON in `brew_advice`. `BrewService.ai_plan` reads it back into the next `/brew` context, where
   its `next_brew` values become 🤖 options; grind is dropped if the default grinder has changed.
-- **After Save** the order is: save → tips (`AdviceService`) → progress card (`ProgressService`,
-  enabled by `PROGRESS_CHAT_ID`), so the card can include the AI's next step. Each step catches its
-  own failures. To send into a forum topic, pass `message_thread_id=` to the `NotificationService`
+- **After Save** the order is: save → progress card (`ProgressService`, enabled by
+  `PROGRESS_CHAT_ID`) → tips (`AdviceService`). AI tips go only to the user's private chat, never
+  into the progress card. Each step catches its own failures. To send into a forum topic, pass `message_thread_id=` to the `NotificationService`
   send methods; `send_media_group` posts albums (caption on the first item).
 
 ## Common extension points

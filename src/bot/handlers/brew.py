@@ -338,18 +338,14 @@ def register_brew_handlers(
         await state.delete()
         text = BrewText.summary(draft, ctx, header=BrewText.saved())
         await notifications.edit_message(call.message, text)
-        tips = None
-        if advice.enabled:
-            tips = await send_advice(call.message.chat.id, call.from_user.id, brew_id, draft, ctx)
         if progress.enabled:
-            await post_progress(call.message.chat.id, call.from_user.id, brew_id, draft, ctx, tips)
+            await post_progress(call.message.chat.id, call.from_user.id, brew_id, draft, ctx)
+        if advice.enabled:
+            await send_advice(call.message.chat.id, call.from_user.id, brew_id, draft, ctx)
 
-    async def send_advice(
-        chat_id: int, user_id: int, brew_id: int, draft, ctx
-    ) -> Optional[dict[str, Any]]:
+    async def send_advice(chat_id: int, user_id: int, brew_id: int, draft, ctx) -> None:
         """Post a "thinking" message, then replace it with the LLM's next-brew tips."""
         notice = await notifications.send_message(chat_id, BrewText.thinking())
-        tips = None
         try:
             tips = await advice.advise(user_id, brew_id, draft, ctx)
             text = BrewText.advice(tips, draft["method"])
@@ -357,12 +353,11 @@ def register_brew_handlers(
             logger.warning("Brew advice failed for brew %s: %s", brew_id, exc, exc_info=exc)
             text = BrewText.advice_failed()
         await notifications.edit_message_text(chat_id, notice.message_id, text)
-        return tips
 
-    async def post_progress(chat_id: int, user_id: int, brew_id: int, draft, ctx, tips) -> None:
+    async def post_progress(chat_id: int, user_id: int, brew_id: int, draft, ctx) -> None:
         """Post the progress card to the configured chat; tell the user if that fails."""
         try:
-            await progress.post(user_id, brew_id, draft, ctx, tips)
+            await progress.post(user_id, brew_id, draft, ctx)
         except Exception as exc:
             logger.warning("Progress post failed for brew %s: %s", brew_id, exc, exc_info=exc)
             reason = getattr(exc, "description", None) or str(exc)
