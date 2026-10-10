@@ -30,6 +30,7 @@ user_commands: CommandSet = CommandSet(
 admin_commands: CommandSet = CommandSet(
     commands=[
         BotCommand("admin", "admin-only example command"),
+        BotCommand("chatid", "show chat/topic IDs for progress posts"),
         *user_commands.commands,
     ],
     scope=BotCommandScope(type="all_private_chats"),

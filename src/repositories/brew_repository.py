@@ -57,6 +57,14 @@ class BrewRepository:
         )
         return [Brew.from_row(row) for row in rows]
 
+    async def count(self, user_id: int, bean_id: int, method: str) -> int:
+        row = await self.db.execute(
+            "SELECT COUNT(*) AS n FROM brews WHERE user_id = ? AND bean_id = ? AND method = ?",
+            (user_id, bean_id, method),
+            fetchone=True,
+        )
+        return row["n"]
+
     async def save_advice(self, brew_id: int, advice: Mapping[str, Any], model: Optional[str]) -> None:
         await self.db.execute(
             "INSERT OR REPLACE INTO brew_advice (brew_id, advice, model) VALUES (?, ?, ?)",
