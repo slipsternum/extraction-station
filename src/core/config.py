@@ -24,6 +24,14 @@ def _parse_list_env(name: str) -> list[str]:
     return [value.strip() for value in normalized.split("\n") if value.strip()]
 
 
+def _parse_chat_id(value: str | None) -> int | str | None:
+    """Numeric chat IDs become ints; ``@channelusername`` stays a string."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    return int(value) if value.lstrip("-").isdigit() else value
+
+
 BOT_TOKEN: str = _get_env("BOT_TOKEN", required=True)
 LOGGING_BOT_TOKEN: str | None = _get_env("LOGGING_BOT_TOKEN") or None
 LOGGER_CHAT_ID: int | None = int(os.getenv("LOGGER_CHAT_ID", "0")) or None
@@ -41,6 +49,9 @@ OPENAI_API_KEY: str | None = _get_env("OPENAI_API_KEY") or None
 OPENAI_BASE_URL: str | None = _get_env("OPENAI_BASE_URL") or None
 OPENAI_MODEL: str | None = _get_env("OPENAI_MODEL") or None
 OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "60"))
+
+PROGRESS_CHAT_ID: int | str | None = _parse_chat_id(os.getenv("PROGRESS_CHAT_ID"))
+PROGRESS_THREAD_ID: int | None = int(os.getenv("PROGRESS_THREAD_ID", "0")) or None
 
 USE_POLLING: bool = os.getenv("USE_POLLING", "true").lower() == "true"
 
@@ -72,6 +83,8 @@ __all__ = [
     "OPENAI_BASE_URL",
     "OPENAI_MODEL",
     "OPENAI_TIMEOUT_SECONDS",
+    "PROGRESS_CHAT_ID",
+    "PROGRESS_THREAD_ID",
     "USE_POLLING",
     "WEBHOOK_HOST",
     "WEBHOOK_PORT",

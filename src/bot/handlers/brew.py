@@ -13,8 +13,9 @@ from src.models.coffee import BREW_METHODS, CLARITY_LABELS, EXTRACTION_LABELS
 from src.services.advice_service import AdviceService
 from src.services.brew_service import GRIND_STEP, BrewService
 from src.services.notification_service import NotificationService
+from src.services.progress_service import ProgressService
 from src.utils.parsing import parse_number, split_notes
-from src.utils.text import BrewText, bean_label
+from src.utils.text import BrewText, ProgressText, bean_label
 
 CANCEL_ROW: list[Button] = [("✖ Cancel", "brew:discard")]
 EXTRACTION_BUTTONS: tuple[tuple[str, str], ...] = (("😖 Under", "under"), ("👌 Good", "good"), ("😬 Over", "over"))
@@ -30,6 +31,7 @@ def register_brew_handlers(
     notifications: NotificationService,
     brews: BrewService,
     advice: AdviceService,
+    progress: ProgressService,
 ) -> None:
 
     async def load(state: AsyncStateContext) -> tuple[dict[str, Any], dict[str, Any], Optional[int]]:
@@ -336,12 +338,18 @@ def register_brew_handlers(
         await state.delete()
         text = BrewText.summary(draft, ctx, header=BrewText.saved())
         await notifications.edit_message(call.message, text)
+        tips = None
         if advice.enabled:
-            await send_advice(call.message.chat.id, call.from_user.id, brew_id, draft, ctx)
+            tips = await send_advice(call.message.chat.id, call.from_user.id, brew_id, draft, ctx)
+        if progress.enabled:
+            await post_progress(call.message.chat.id, call.from_user.id, brew_id, draft, ctx, tips)
 
-    async def send_advice(chat_id: int, user_id: int, brew_id: int, draft, ctx) -> None:
+    async def send_advice(
+        chat_id: int, user_id: int, brew_id: int, draft, ctx
+    ) -> Optional[dict[str, Any]]:
         """Post a "thinking" message, then replace it with the LLM's next-brew tips."""
         notice = await notifications.send_message(chat_id, BrewText.thinking())
+        tips = None
         try:
             tips = await advice.advise(user_id, brew_id, draft, ctx)
             text = BrewText.advice(tips, draft["method"])
@@ -349,6 +357,16 @@ def register_brew_handlers(
             logger.warning("Brew advice failed for brew %s: %s", brew_id, exc, exc_info=exc)
             text = BrewText.advice_failed()
         await notifications.edit_message_text(chat_id, notice.message_id, text)
+        return tips
+
+    async def post_progress(chat_id: int, user_id: int, brew_id: int, draft, ctx, tips) -> None:
+        """Post the progress card to the configured chat; tell the user if that fails."""
+        try:
+            await progress.post(user_id, brew_id, draft, ctx, tips)
+        except Exception as exc:
+            logger.warning("Progress post failed for brew %s: %s", brew_id, exc, exc_info=exc)
+            reason = getattr(exc, "description", None) or str(exc)
+            await notifications.send_message(chat_id, ProgressText.failed(reason))
 
     @bot.callback_query_handler(func=callback_prefix("brew:discard"), isadmin=True)
     async def on_discard(call: types.CallbackQuery, state: AsyncStateContext):

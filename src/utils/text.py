@@ -75,6 +75,7 @@ class HelpText:
             "- /beans: list and archive your beans\n"
             "- /history: your recent brews\n"
             "- /setup: register your grinder, espresso machine and dripper\n"
+            "- /chatid: show the chat/topic IDs for progress posts (use it in that chat)\n"
             "- /cancel: cancel the current operation\n"
             "- /ping: check bot health"
         )
@@ -304,7 +305,7 @@ class BrewText:
         out = draft.get("yield_g") or draft.get("water_g")
         if not dose or not out:
             return None
-        return f"1:{out / dose:.1f}"
+        return f"1:{round(out / dose, 1):g}"
 
     @staticmethod
     def saved() -> str:
@@ -377,10 +378,99 @@ class BrewText:
         return "\n".join(lines)
 
 
+EXTRACTION_EMOJI: dict[str, str] = {"under": "😖", "good": "👌", "over": "😬"}
+
+
+def _short(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+class ProgressText:
+    @staticmethod
+    def _was(current: Optional[str], previous: Optional[str]) -> str:
+        return f" <i>(was {previous})</i>" if previous and current and previous != current else ""
+
+    @staticmethod
+    def caption(
+        draft: Mapping[str, Any],
+        ctx: Mapping[str, Any],
+        *,
+        attempt: int,
+        previous: Any = None,
+        advice: Optional[Mapping[str, Any]] = None,
+    ) -> str:
+        """Progress card caption; changes from the previous attempt are shown as "(was …)"."""
+        method = BREW_METHODS[draft["method"]]
+        bean = next((b for b in ctx["beans"] if b["id"] == draft["bean_id"]), {})
+        before = {
+            column: getattr(previous, column, None)
+            for column in ("grind_setting", "dose_g", "yield_g", "water_g", "temp_c", "time_s")
+        }
+        lines = [f"<b>{method.label} · attempt {attempt}</b>"]
+        age = roast_age(bean.get("roast_date"))
+        lines.append(f"☕ {_e(bean_label(bean))}" + (f" · <i>{age}</i>" if age else ""))
+
+        grind = draft.get("grind_setting")
+        if grind is not None:
+            prev = before["grind_setting"]
+            was = ProgressText._was(f"{grind:g}", f"{prev:g}" if prev is not None else None)
+            line = f"⚙️ {grind:g}{was}"
+            if draft.get("grinder_name"):
+                line += f" · {_e(draft['grinder_name'])}"
+            lines.append(line)
+
+        dose, out = draft.get("dose_g"), draft.get("yield_g") or draft.get("water_g")
+        ratio = BrewText.ratio(draft)
+        if ratio:
+            lines.append(f"💧 {ratio} ({dose:g}g / {out:g}g){ProgressText._was(ratio, BrewText.ratio(before))}")
+        elif dose:
+            lines.append(f"💧 {dose:g}g")
+
+        for column, emoji in (("time_s", "⏰"), ("temp_c", "🌡")):
+            field = next((f for f in method.fields if f.column == column), None)
+            if field and draft.get(column) is not None:
+                current = format_value(draft[column], field)
+                prev = format_value(before[column], field) if before[column] is not None else None
+                lines.append(f"{emoji} {current}{ProgressText._was(current, prev)}")
+
+        verdict = []
+        if draft.get("extraction"):
+            verdict.append(f"{EXTRACTION_EMOJI[draft['extraction']]} {EXTRACTION_LABELS[draft['extraction']]}")
+        if draft.get("clarity"):
+            verdict.append(f"{CLARITY_LABELS[draft['clarity']].lower()} cup")
+        if draft.get("rating"):
+            verdict.append("★" * draft["rating"] + "☆" * (5 - draft["rating"]))
+        if verdict:
+            lines += ["", " · ".join(verdict)]
+        if draft.get("tasting_notes"):
+            lines.append(f"👅 {_e(', '.join(draft['tasting_notes'][:12]))}")
+        if draft.get("comment"):
+            lines.append(f"💬 {_e(_short(draft['comment'], 200))}")
+        if advice and advice.get("primary_change"):
+            lines += ["", f"🤖 <b>Next:</b> {_e(_short(advice['primary_change'], 220))}"]
+        return "\n".join(lines)
+
+    @staticmethod
+    def failed(reason: str) -> str:
+        return f"⚠️ Couldn't post the progress update: <code>{_e(_short(reason, 200))}</code>"
+
+    @staticmethod
+    def chat_info(chat_id: int, thread_id: Optional[int]) -> str:
+        lines = [
+            "Add these to <code>.env</code> to post brew progress here:",
+            "",
+            f"<code>PROGRESS_CHAT_ID={chat_id}</code>",
+        ]
+        if thread_id:
+            lines.append(f"<code>PROGRESS_THREAD_ID={thread_id}</code>")
+        return "\n".join(lines)
+
+
 __all__ = [
     "BeanText",
     "BrewText",
     "HelpText",
+    "ProgressText",
     "SetupText",
     "WelcomeText",
     "bean_label",

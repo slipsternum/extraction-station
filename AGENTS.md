@@ -6,7 +6,7 @@ consistent with the conventions below.
 ## What this is
 
 Extraction Station: a Telegram bot for logging coffee brews and dialling in (equipment setup,
-bean bags read from photos by an LLM, a button-driven `/brew` log, and LLM tips for the next brew). It is built on an async
+bean bags read from photos by an LLM, a button-driven `/brew` log, and LLM tips for the next brew, and progress posts to a group/topic). It is built on an async
 **pyTelegramBotAPI** (`telebot`) template with a **FastAPI** app for webhook mode. It can run in two modes:
 
 - **Polling** (default, `USE_POLLING=true`) — long-polls Telegram; best for development.
@@ -35,7 +35,7 @@ src/
     states.py               Conversation states
   models/                   Dataclasses, brew methods/equipment kinds (coffee.py), SQL schema
   repositories/             Async SQLite data access (equipment, beans, brews)
-  services/                 Business logic: notification, llm, setup, bean, brew, advice
+  services/                 Business logic: notification, llm, setup, bean, brew, advice, progress
   utils/                    User-facing text (text.py) and input parsing (parsing.py)
 ```
 
@@ -86,6 +86,10 @@ documented in `README.md` and `.env.example`.
   sends this brew plus the bean/method history (with earlier advice) and stores the normalised
   JSON in `brew_advice`. `BrewService.ai_plan` reads it back into the next `/brew` context, where
   its `next_brew` values become 🤖 options; grind is dropped if the default grinder has changed.
+- **After Save** the order is: save → tips (`AdviceService`) → progress card (`ProgressService`,
+  enabled by `PROGRESS_CHAT_ID`), so the card can include the AI's next step. Each step catches its
+  own failures. To send into a forum topic, pass `message_thread_id=` to the `NotificationService`
+  send methods; `send_media_group` posts albums (caption on the first item).
 
 ## Common extension points
 

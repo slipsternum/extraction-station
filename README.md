@@ -15,6 +15,10 @@ pyTelegramBotAPI + FastAPI template.
   before) and replies with a diagnosis, one primary change with a full recipe, other ways in and
   what to taste for. The next `/brew` with those beans shows the tip and offers its numbers as 🤖
   buttons alongside the finer/coarser rule of thumb.
+- **Progress posts**: after each brew, the bot posts a progress card to a chat you choose (a group,
+  a forum topic or a channel): your cup and bag photos as an album, the attempt number for those
+  beans and method, grind, ratio, time, the verdict and notes, changes from the previous attempt
+  ("was 12") and the AI's next step. Run `/chatid` in that chat or topic to get the IDs to configure.
 - **/history** and **/beans**: recent brews, and your bags (archive a bag when it's finished).
 
 The in-progress brew lives in conversation state; nothing is written to the database until you
@@ -169,6 +173,16 @@ the rule-of-thumb grind suggestion.
 | `OPENAI_API_KEY` | API key for the provider | - | No |
 | `OPENAI_BASE_URL` | Base URL of an OpenAI-compatible API | OpenAI | No |
 | `OPENAI_TIMEOUT_SECONDS` | Request timeout | `60` | No |
+
+### Progress Posts
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `PROGRESS_CHAT_ID` | Chat to post progress cards to (`-100…` group/channel ID or `@channelname`); empty disables | - | No |
+| `PROGRESS_THREAD_ID` | Forum topic ID within that chat | - | No |
+
+The bot must be a member of that chat (an admin, for channels). Send `/chatid` inside the target
+chat or topic and it replies with both values. If a post fails, the bot tells you in your DM.
 
 ### Webhook Configuration
 
@@ -402,6 +416,7 @@ All commands are admin-only (gated by the `isadmin` filter):
 - `/help` - Show available commands
 - `/ping` - Check bot health
 - `/cancel` - Cancel current operation
+- `/chatid` - Show the chat and topic IDs for progress posts (send it in that chat)
 - `/admin` - Example admin-only command
 
 ## Troubleshooting

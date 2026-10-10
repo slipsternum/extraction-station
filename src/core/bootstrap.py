@@ -26,6 +26,7 @@ from src.services.bean_service import BeanService
 from src.services.brew_service import BrewService
 from src.services.llm_service import LLMService
 from src.services.notification_service import NotificationService
+from src.services.progress_service import ProgressService
 from src.services.setup_service import SetupService
 
 ALLOWED_UPDATES = [
@@ -48,6 +49,7 @@ class BotContext:
     beans: BeanService
     brews: BrewService
     advice: AdviceService
+    progress: ProgressService
 
 
 def _ensure_directories() -> None:
@@ -110,6 +112,12 @@ async def bootstrap_services(bot: AsyncTeleBot) -> BotContext:
         beans=BeanService(bot, bean_repo, llm),
         brews=BrewService(bean_repo, brew_repo, equipment_repo),
         advice=AdviceService(llm, brew_repo),
+        progress=ProgressService(
+            notifications,
+            brew_repo,
+            chat_id=config.PROGRESS_CHAT_ID,
+            thread_id=config.PROGRESS_THREAD_ID,
+        ),
     )
 
 
@@ -138,6 +146,7 @@ def register_handlers(context: BotContext) -> None:
         notifications=context.notifications,
         brews=context.brews,
         advice=context.advice,
+        progress=context.progress,
     )
 
 

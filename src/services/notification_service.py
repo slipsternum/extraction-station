@@ -31,6 +31,7 @@ class NotificationService:
         *,
         reply_markup: Markup = None,
         disable_web_page_preview: bool = True,
+        message_thread_id: Optional[int] = None,
     ) -> types.Message:
         message = await self._call_bot(
             "send_message",
@@ -38,6 +39,7 @@ class NotificationService:
             text,
             reply_markup=reply_markup,
             disable_web_page_preview=disable_web_page_preview,
+            message_thread_id=message_thread_id,
         )
         logger.log(f"Sent message to {chat_id}", level="DEBUG")
         return message
@@ -74,10 +76,32 @@ class NotificationService:
         *,
         caption: Optional[str] = None,
         reply_markup: Markup = None,
+        message_thread_id: Optional[int] = None,
     ) -> types.Message:
-        message = await self._call_bot("send_photo", chat_id, photo, caption=caption, reply_markup=reply_markup)
+        message = await self._call_bot(
+            "send_photo",
+            chat_id,
+            photo,
+            caption=caption,
+            reply_markup=reply_markup,
+            message_thread_id=message_thread_id,
+        )
         logger.log(f"Sent photo to {chat_id}", level="DEBUG")
         return message
+
+    async def send_media_group(
+        self,
+        chat_id: int,
+        media: list[types.InputMediaPhoto],
+        *,
+        message_thread_id: Optional[int] = None,
+    ) -> list[types.Message]:
+        """Send 2-10 photos as one album; put the caption on the first item."""
+        messages = await self._call_bot(
+            "send_media_group", chat_id, media, message_thread_id=message_thread_id
+        )
+        logger.log(f"Sent album of {len(media)} to {chat_id}", level="DEBUG")
+        return messages
 
     async def edit_message_text(
         self,
