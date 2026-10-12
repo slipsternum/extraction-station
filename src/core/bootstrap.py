@@ -88,7 +88,7 @@ async def bootstrap_services(bot: AsyncTeleBot) -> BotContext:
     adapter = AsyncSQLiteAdapter(config.SQLITE_DB_PATH, config.SQLITE_SCHEMA_PATH)
     await adapter.connect()
 
-    notifications = NotificationService(bot)
+    notifications = NotificationService(bot, rich=config.RICH_MESSAGES)
     llm = LLMService(
         model=config.OPENAI_MODEL,
         api_key=config.OPENAI_API_KEY,

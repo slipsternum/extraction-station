@@ -15,6 +15,7 @@ from src.services.brew_service import GRIND_STEP, BrewService
 from src.services.notification_service import NotificationService
 from src.services.progress_service import ProgressService
 from src.utils.parsing import parse_number, split_notes
+from src.utils.rich import BrewRich
 from src.utils.text import BrewText, ProgressText, bean_label
 
 CANCEL_ROW: list[Button] = [("✖ Cancel", "brew:discard")]
@@ -215,7 +216,11 @@ def register_brew_handlers(
     async def handle_history(message: types.Message, state: AsyncStateContext):
         recent = await brews.recent(message.from_user.id, limit=10)
         brewing = await brews.brewing(message.from_user.id)
-        await notifications.send_message(message.chat.id, BrewText.history(recent, brewing))
+        text = BrewText.history(recent, brewing)
+        if not recent and not brewing:
+            await notifications.send_message(message.chat.id, text)
+            return
+        await notifications.send_rich_or_text(message.chat.id, lambda: BrewRich.history(recent, brewing), text)
 
     @on_button("brew:new", BrewStates.brewing)
     async def on_new(call, state, draft, ctx):
@@ -257,7 +262,12 @@ def register_brew_handlers(
         if brew_id is None:
             await notifications.edit_message(call.message, BrewText.already_finished())
             return
-        await notifications.edit_message(call.message, BrewText.summary(draft, ctx, header=BrewText.parked()))
+        await notifications.edit_rich_or_text(
+            call.message.chat.id,
+            call.message.message_id,
+            lambda: BrewRich.card(draft, ctx, header="⏸ Brewing", footer="Run /brew when it's ready to finish it."),
+            BrewText.summary(draft, ctx, header=BrewText.parked()),
+        )
 
     for step in (BrewStates.param, BrewStates.photo, BrewStates.extraction):
         on_button("brew:park", step)(park)
@@ -408,8 +418,12 @@ def register_brew_handlers(
         if brew_id is None:
             await notifications.edit_message(call.message, BrewText.already_finished())
             return
-        text = BrewText.summary(draft, ctx, header=BrewText.saved())
-        await notifications.edit_message(call.message, text)
+        await notifications.edit_rich_or_text(
+            call.message.chat.id,
+            call.message.message_id,
+            lambda: BrewRich.card(draft, ctx, header="💾 Brew saved"),
+            BrewText.summary(draft, ctx, header=BrewText.saved()),
+        )
         if progress.enabled:
             await post_progress(call.message.chat.id, call.from_user.id, brew_id, draft, ctx)
         if advice.enabled:
@@ -423,8 +437,9 @@ def register_brew_handlers(
             text = BrewText.advice(tips, draft["method"])
         except Exception as exc:
             logger.warning("Brew advice failed for brew %s: %s", brew_id, exc, exc_info=exc)
-            text = BrewText.advice_failed()
-        await notifications.edit_message_text(chat_id, notice.message_id, text)
+            await notifications.edit_message_text(chat_id, notice.message_id, BrewText.advice_failed())
+            return
+        await notifications.edit_rich_or_text(chat_id, notice.message_id, lambda: BrewRich.advice(tips, draft), text)
 
     async def post_progress(chat_id: int, user_id: int, brew_id: int, draft, ctx) -> None:
         """Post the progress card to the configured chat; tell the user if that fails."""

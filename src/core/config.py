@@ -53,6 +53,8 @@ OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "60"))
 PROGRESS_CHAT_ID: int | str | None = _parse_chat_id(os.getenv("PROGRESS_CHAT_ID"))
 PROGRESS_THREAD_ID: int | None = int(os.getenv("PROGRESS_THREAD_ID", "0")) or None
 
+RICH_MESSAGES: bool = os.getenv("RICH_MESSAGES", "true").lower() == "true"
+
 USE_POLLING: bool = os.getenv("USE_POLLING", "true").lower() == "true"
 
 WEBHOOK_HOST = os.getenv("WEBHOOK_HOST")
@@ -85,6 +87,7 @@ __all__ = [
     "OPENAI_TIMEOUT_SECONDS",
     "PROGRESS_CHAT_ID",
     "PROGRESS_THREAD_ID",
+    "RICH_MESSAGES",
     "USE_POLLING",
     "WEBHOOK_HOST",
     "WEBHOOK_PORT",

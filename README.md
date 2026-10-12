@@ -77,21 +77,33 @@ The next `/brew` with those beans brings the tip back and offers its numbers as 
 ### Progress posts
 
 Point the bot at a group, forum topic or channel, and each brew is posted there as a card. It
-shows your cup and bag photos, the attempt number for those beans and method, and the recipe, with
-anything changed since the last attempt marked:
+shows your cup and bag photos as a collage, the attempt number for those beans and method, and the
+recipe next to your last attempt, with changed values in bold:
 
 ```
+[cup photo | bag photo]
 Cold brew · attempt 2
 ☕ HoneyBloom · roasted 5 Oct (7 days ago)
-⚙️ 82 (was 85) · DF54
-💧 1:10 (45g / 450g) (was 1:12)
-⏰ 19h
 
-👌 Well extracted · clean cup · ★★★★★
+             This brew   Last time
+Grind        82          85
+Dose         45g         45g
+Ratio        1:10        1:12
+Steep time   19h         16h
+
+👌 Well extracted · Clean cup · ★★★★★
 👅 floral, honey
 ```
 
 AI tips never appear in progress posts.
+
+### Rich messages
+
+Progress posts, `/history`, the saved-brew card and the AI tips use Telegram's rich messages:
+tables, and collapsible sections for tasting notes and other suggestions. The step-by-step `/brew`
+panel stays plain text. If Telegram rejects a rich message, the bot sends the plain HTML version
+instead and logs a warning. Set `RICH_MESSAGES=false` to always use plain HTML, for example if
+your Telegram app doesn't display them well.
 
 ## Quick start
 
@@ -169,6 +181,7 @@ empty, you enter beans by hand and `/brew` uses the rule-of-thumb grind suggesti
 |----------|-------------|---------|
 | `PROGRESS_CHAT_ID` | Group/channel to post to (`-100…` ID or `@channelname`); empty disables | - |
 | `PROGRESS_THREAD_ID` | Forum topic within that chat | - |
+| `RICH_MESSAGES` | Use rich messages (tables, collages); `false` for plain HTML | `true` |
 
 To set it up:
 

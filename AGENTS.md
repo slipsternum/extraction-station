@@ -36,7 +36,7 @@ src/
   models/                   Dataclasses, brew methods/equipment kinds (coffee.py), SQL schema
   repositories/             Async SQLite data access (equipment, beans, brews)
   services/                 Business logic: notification, llm, setup, bean, brew, advice, progress
-  utils/                    User-facing text (text.py) and input parsing (parsing.py)
+  utils/                    User-facing text (text.py), rich-message layouts (rich.py), input parsing
 ```
 
 Startup flow: `main.py` → `app.run()` → `bootstrap_bot()` (create bot → configure
@@ -82,6 +82,12 @@ documented in `README.md` and `.env.example`.
   `"<flow>:"` callback handler must be registered last.
 - **Editing messages**: use `notifications.edit_message(message, ...)`, which edits the caption
   for photo messages and the text otherwise.
+- **Rich messages** (Bot API tables, collapsible sections, collages) are built from typed blocks in
+  `src/utils/rich.py`. Every rich screen has a plain-HTML twin in `text.py`. Send rich messages
+  with `notifications.send_rich_or_text` / `edit_rich_or_text`, passing the rich builder as a
+  callable plus the HTML text. They fall back to the text when `RICH_MESSAGES` is off or Telegram
+  rejects the message. Keep the step-by-step `/brew` panel plain, since it is edited on every tap;
+  use rich only for read-only or final screens.
 - **LLM calls** go through `LLMService` (OpenAI SDK, Chat Completions, configurable
   `OPENAI_BASE_URL`/`OPENAI_MODEL`); it is disabled when `OPENAI_MODEL` is unset. Every LLM
   feature must degrade gracefully: catch failures, log a warning, and keep the core flow working.
