@@ -152,7 +152,9 @@ There is no automated test suite or configured linter. Before considering a chan
 
 ## Notes
 
-- Timestamps are emitted in UTC.
+- Timestamps are stored and logged in UTC. Anything shown in chat (dates, start times, "today"
+  for roast age) goes through `to_local` / `today_local` in `src/utils/parsing.py`, which use
+  `UTC_OFFSET_HOURS` (default 8).
 - The Telegram log mirror is optional; it activates only when both `LOGGING_BOT_TOKEN`
   and `LOGGER_CHAT_ID` are set.
 - Webhook mode can auto-generate a self-signed certificate when SSL paths are configured

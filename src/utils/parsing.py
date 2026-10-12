@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
+
+from src.core import config
 
 _DATE_FORMATS = ("%Y-%m-%d", "%d/%m/%Y", "%d.%m.%Y", "%d %b %Y", "%d %B %Y", "%b %d %Y", "%B %d %Y")
 _YEARLESS_FORMATS = ("%d/%m", "%d.%m", "%d %b", "%d %B", "%b %d", "%B %d")
 
 
-def today_utc() -> date:
-    return datetime.now(timezone.utc).date()
+LOCAL_TZ = timezone(timedelta(hours=config.UTC_OFFSET_HOURS))
+
+
+def today_local() -> date:
+    return datetime.now(LOCAL_TZ).date()
+
+
+def to_local(timestamp: str) -> datetime:
+    """A stored UTC timestamp (``2026-10-12T08:00:00Z``) in the configured local time."""
+    return datetime.fromisoformat(timestamp).astimezone(LOCAL_TZ)
 
 
 def parse_date(text: str, *, today: Optional[date] = None) -> Optional[date]:
@@ -21,7 +31,7 @@ def parse_date(text: str, *, today: Optional[date] = None) -> Optional[date]:
             return datetime.strptime(cleaned, fmt).date()
         except ValueError:
             pass
-    today = today or today_utc()
+    today = today or today_local()
     for fmt in _YEARLESS_FORMATS:
         try:
             parsed = datetime.strptime(f"{cleaned} {today.year}", f"{fmt} %Y").date()
@@ -48,4 +58,4 @@ def split_notes(text: str) -> list[str]:
     return [note.strip().lower() for note in re.split(r"[,;\n/]", text) if note.strip()]
 
 
-__all__ = ["parse_date", "parse_number", "split_notes", "today_utc"]
+__all__ = ["LOCAL_TZ", "parse_date", "parse_number", "split_notes", "to_local", "today_local"]
