@@ -75,7 +75,10 @@ documented in `README.md` and `.env.example`.
 - **Multi-step flows** keep their draft in conversation state (`state.add_data` /
   `async with state.data()`) and write to the database once, on the final confirm. `/brew`
   loads everything it needs (`BrewService.load_context`) at the start so button taps never hit
-  the database. Callback data is `<flow>:<action>[:<arg>]` (64-byte limit); a flow's catch-all
+  the database. The one exception is **⏸ Finish later**: it parks the draft as a `brews` row with
+  `status = 'brewing'`, `/brew` lists those first, and resuming one rebuilds the draft from that
+  row. Save then updates the row to `done`. Brew history, suggestions, counts and advice read
+  `done` brews only. Callback data is `<flow>:<action>[:<arg>]` (64-byte limit); a flow's catch-all
   `"<flow>:"` callback handler must be registered last.
 - **Editing messages**: use `notifications.edit_message(message, ...)`, which edits the caption
   for photo messages and the text otherwise.
@@ -104,6 +107,11 @@ Adding a command (e.g. `/foo`) touches up to three places:
 Other extension points: conversation states in `src/core/states.py`, data models and
 schemas under `src/models/`, repositories in `src/repositories/`, and API routes in
 `src/api/routers/` (register new routers in `src/api/routers/__init__.py`).
+
+The schema is `CREATE TABLE IF NOT EXISTS`, so a new column on an existing table goes in both
+`bot_schema.sql` and `ADDED_COLUMNS` (`src/models/schemas/__init__.py`), which adds it to older
+databases on startup. Don't index a new column in `bot_schema.sql`, because the index is created
+before that column exists in an older database.
 
 ## Dependencies
 

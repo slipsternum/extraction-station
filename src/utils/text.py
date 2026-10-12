@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import date
-from typing import Any, Mapping, Optional
+from datetime import date, datetime, timezone
+from typing import Any, Mapping, Optional, Sequence
 
 from telebot.formatting import escape_html
 
@@ -40,6 +40,22 @@ def roast_age(roast_date: Optional[str]) -> Optional[str]:
     if days < 0:
         return f"roasted {when}"
     return f"roasted {when} ({days} day{'s' if days != 1 else ''} ago)"
+
+
+def started_label(created_at: str) -> str:
+    """A brew's start time, e.g. "12 Oct 20:15 UTC (14h ago)"."""
+    try:
+        started = datetime.fromisoformat(created_at)
+    except ValueError:
+        return _e(created_at)
+    minutes = max(int((datetime.now(timezone.utc) - started).total_seconds() // 60), 0)
+    if minutes < 60:
+        ago = f"{minutes}m"
+    elif minutes < 48 * 60:
+        ago = f"{minutes // 60}h" + (f" {minutes % 60}m" if minutes < 6 * 60 and minutes % 60 else "")
+    else:
+        ago = f"{minutes // 1440}d"
+    return f"{started.day} {started:%b %H:%M} UTC ({ago} ago)"
 
 
 def bean_label(bean: Mapping[str, Any]) -> str:
@@ -239,7 +255,10 @@ class BrewText:
 
     @staticmethod
     def photo() -> str:
-        return "Brew away ☕\n\nWhen you're done, send a photo of it, or tap Skip."
+        return (
+            "Brew away ☕\n\nWhen you're done, send a photo of it, or tap Skip.\n"
+            "<i>Long brew? Tap Finish later and pick it up with /brew.</i>"
+        )
 
     @staticmethod
     def extraction() -> str:
@@ -343,6 +362,38 @@ class BrewText:
         return "🗑 Brew discarded."
 
     @staticmethod
+    def brewing_list(brewing: list[Mapping[str, Any]]) -> str:
+        if not brewing:
+            return "☕ Nothing brewing. Start a new brew?"
+        lines = ["⏳ <b>In progress</b>", ""]
+        for brew in brewing:
+            method = BREW_METHODS[brew["method"]]
+            lines.append(f"<b>{method.label}</b> · {_e(brew.get('bean_name') or '?')}")
+            lines.append(f"<i>started {started_label(brew['created_at'])}</i>")
+        lines += ["", "Tap ▶ to finish one, or start a new brew."]
+        return "\n".join(lines)
+
+    @staticmethod
+    def brewing_button(brew: Mapping[str, Any]) -> str:
+        return f"▶ {BREW_METHODS[brew['method']].label} · {brew.get('bean_name') or '?'}"[:60]
+
+    @staticmethod
+    def confirm_drop(brew: Mapping[str, Any]) -> str:
+        method = BREW_METHODS[brew["method"]]
+        return (
+            f"Discard the <b>{method.label.lower()}</b> of {_e(brew.get('bean_name') or '?')} "
+            f"started {started_label(brew['created_at'])}?"
+        )
+
+    @staticmethod
+    def parked() -> str:
+        return "⏸ <b>Brewing</b>\n<i>Run /brew when it's ready to finish it.</i>"
+
+    @staticmethod
+    def already_finished() -> str:
+        return "That brew was already finished or discarded. Run /brew to see what's open."
+
+    @staticmethod
     def stale() -> str:
         return "That brew has ended. Start a new one with /brew."
 
@@ -355,10 +406,20 @@ class BrewText:
         return "Add a bag of beans first with /newbean."
 
     @staticmethod
-    def history(brews: list[Any]) -> str:
-        if not brews:
+    def history(brews: list[Any], brewing: Sequence[Any] = ()) -> str:
+        if not brews and not brewing:
             return "No brews yet. Start one with /brew."
-        lines = ["📒 <b>Recent brews</b>", ""]
+        lines: list[str] = []
+        if brewing:
+            lines += ["⏳ <b>Brewing</b>", ""]
+            for brew in brewing:
+                method = BREW_METHODS.get(brew.method)
+                label = method.label if method else brew.method
+                lines.append(f"{label} · {_e(brew.bean_name or '?')} · <i>{started_label(brew.created_at)}</i>")
+            lines.append("")
+        if not brews:
+            return "\n".join(lines).rstrip()
+        lines += ["📒 <b>Recent brews</b>", ""]
         for brew in brews:
             method = BREW_METHODS.get(brew.method)
             when = date.fromisoformat(brew.created_at[:10])

@@ -187,7 +187,11 @@ class Brew:
     comment: Optional[str]
     photo_file_id: Optional[str]
     created_at: str
+    status: str = "done"
+    finished_at: Optional[str] = None
     bean_name: Optional[str] = None
+    grinder_name: Optional[str] = None
+    brewer_name: Optional[str] = None
     ai_advice: Optional[dict[str, Any]] = None
 
     @classmethod
@@ -213,7 +217,11 @@ class Brew:
             comment=row["comment"],
             photo_file_id=row["photo_file_id"],
             created_at=row["created_at"],
+            status=row["status"],
+            finished_at=row["finished_at"],
             bean_name=row["bean_name"] if "bean_name" in keys else None,
+            grinder_name=row["grinder_name"] if "grinder_name" in keys else None,
+            brewer_name=row["brewer_name"] if "brewer_name" in keys else None,
             ai_advice=_advice(row["ai_advice"]) if "ai_advice" in keys else None,
         )
 

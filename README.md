@@ -38,7 +38,29 @@ hand if no model is configured.
 6. **Tasting**: under/good/over extraction, clarity, tasting notes (the bag's notes come first as
    buttons) and a rating.
 7. **Save**: the draft lives in conversation state until this point, so nothing is written to the
-   database before you save.
+   database before you save (or park it, below).
+
+### Long brews
+
+Some brews can't be finished in one sitting. A cold brew steeps overnight, so you can't enter the
+steep time or taste it until the next day. From the recipe step onwards, tap **⏸ Finish later**
+to park the brew. It's stored as *brewing* and you're free to log other brews in the meantime.
+
+When any brews are in progress, `/brew` lists them first:
+
+```
+⏳ In progress
+Cold brew · Guji
+started 11 Oct 23:09 UTC (14h ago)
+
+[▶ Cold brew · Guji] [🗑]
+[➕ New brew]
+```
+
+Tap ▶ to carry on from the first step you hadn't filled in. The steep or brew time offers
+**🕐 since start**, measured from when you started the brew. A parked brew stays out of your
+history, suggestions and progress posts until you save it. 🗑 (or Discard at the review step)
+throws it away.
 
 ### Next-brew tips
 
@@ -109,7 +131,7 @@ To find your Telegram user ID, message [@userinfobot](https://t.me/userinfobot).
 | `/brew` | Log a brew; tips for the next one follow the save |
 | `/newbean` | Add a bag of beans from a photo or text |
 | `/beans` | List your beans; archive a bag when it's finished |
-| `/history` | Your last 10 brews |
+| `/history` | Brews in progress, then your last 10 brews |
 | `/setup` | Register your grinder, espresso machine and dripper |
 | `/chatid` | Show the chat and topic IDs for progress posts (send it in that chat) |
 | `/cancel` | Cancel the current flow |
@@ -161,7 +183,7 @@ If a post fails, the bot tells you why in your private chat. The brew itself is 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SQLITE_DB_PATH` | SQLite database | `./.data/data.sqlite` |
-| `STATE_STORAGE_PATH` | Conversation state (in-progress brews) | `./.data/states.pkl` |
+| `STATE_STORAGE_PATH` | Conversation state (the brew you're tapping through) | `./.data/states.pkl` |
 | `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING` or `ERROR` | `INFO` |
 | `LOGGING_BOT_TOKEN` / `LOGGER_CHAT_ID` | Optional: mirror logs to a Telegram chat | - |
 
@@ -183,8 +205,8 @@ those files don't exist, a self-signed certificate is generated for you (this ne
   then look for warnings in the logs.
 - **Progress posts fail.** The bot must be in the chat (as an admin, for channels) and allowed to
   post in that topic. The DM it sends you includes Telegram's reason.
-- **Buttons say the brew has ended.** That panel is from a finished or cancelled brew. Start a new
-  one with `/brew`.
+- **Buttons say the brew has ended.** That panel is from a finished, parked or cancelled brew. Run
+  `/brew` to start a new one or finish a parked one.
 
 ## Development
 

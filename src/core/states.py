@@ -22,8 +22,9 @@ class BeanStates(StatesGroup):
 
 
 class BrewStates(StatesGroup):
-    """/brew: one state per step; the draft lives in state data until it is saved."""
+    """/brew: one state per step; the draft lives in state data until it is saved or parked."""
 
+    brewing = State()
     bean = State()
     method = State()
     grind = State()

@@ -2,6 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# Columns added after a table was first created; older databases gain them on startup.
+ADDED_COLUMNS: dict[str, dict[str, str]] = {
+    "brews": {
+        "status": "TEXT NOT NULL DEFAULT 'done' CHECK (status IN ('brewing', 'done'))",
+        "finished_at": "TEXT",
+    },
+}
+
 
 def load_schema(schema_path: str | None = None) -> str:
     """Load SQL schema from file path.
@@ -27,4 +35,4 @@ def load_schema(schema_path: str | None = None) -> str:
     return path.read_text(encoding="utf-8")
 
 
-__all__ = ["load_schema"]
+__all__ = ["ADDED_COLUMNS", "load_schema"]

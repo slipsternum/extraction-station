@@ -8,7 +8,7 @@ from typing import Any, AsyncIterator, Iterable, Optional, Sequence
 import aiosqlite
 
 from src.core import config
-from src.models.schemas import load_schema
+from src.models.schemas import ADDED_COLUMNS, load_schema
 
 
 class AsyncSQLiteAdapter:
@@ -39,7 +39,17 @@ class AsyncSQLiteAdapter:
         assert self._conn is not None
         schema = load_schema(self.schema_path)
         await self._conn.executescript(schema)
+        await self._add_missing_columns()
         await self._conn.commit()
+
+    async def _add_missing_columns(self) -> None:
+        assert self._conn is not None
+        for table, columns in ADDED_COLUMNS.items():
+            async with self._conn.execute(f"PRAGMA table_info({table})") as cursor:
+                existing = {row["name"] for row in await cursor.fetchall()}
+            for column, definition in columns.items():
+                if column not in existing:
+                    await self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
     async def close(self) -> None:
         async with self._lock:

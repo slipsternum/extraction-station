@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime, timezone
 from typing import Any, Optional
 
-from src.models.coffee import BASIC_NOTES, BREW_COLUMNS, Brew, BrewField
+from src.models.coffee import BASIC_NOTES, BREW_COLUMNS, BREW_METHODS, Brew, BrewField
 from src.repositories.bean_repository import BeanRepository
 from src.repositories.brew_repository import BrewRepository
 from src.repositories.equipment_repository import EquipmentRepository
@@ -32,17 +33,70 @@ class BrewService:
         beans = await self.beans.list_active(user_id)
         defaults = await self.equipment.defaults(user_id)
         recent = await self.brews.latest_per_group(user_id)
+        brewing = await self.brews.open_brews(user_id)
+        active = {bean.id for bean in beans}
+        for bean_id in dict.fromkeys(b.bean_id for b in brewing if b.bean_id not in active):
+            bean = await self.beans.get(user_id, bean_id)
+            if bean:
+                beans.append(bean)
         return {
             "beans": [asdict(bean) for bean in beans],
             "equipment": {kind: {"id": e.id, "name": e.name} for kind, e in defaults.items()},
             "recent": [asdict(brew) for brew in recent],
+            "brewing": [asdict(brew) for brew in brewing],
         }
 
     async def recent(self, user_id: int, limit: int = 10) -> list[Brew]:
         return await self.brews.recent(user_id, limit)
 
-    async def save(self, user_id: int, draft: dict[str, Any]) -> int:
-        return await self.brews.add(user_id, {column: draft.get(column) for column in BREW_COLUMNS})
+    async def brewing(self, user_id: int) -> list[Brew]:
+        return await self.brews.open_brews(user_id)
+
+    async def save(self, user_id: int, draft: dict[str, Any]) -> Optional[int]:
+        """Save a finished brew; a resumed brew finishes its open row. None if that row is gone."""
+        values = {column: draft.get(column) for column in BREW_COLUMNS}
+        if draft.get("brew_id"):
+            return await self.brews.update_open(user_id, draft["brew_id"], values, status="done")
+        return await self.brews.add(user_id, values)
+
+    async def park(self, user_id: int, draft: dict[str, Any]) -> Optional[int]:
+        """Store an unfinished brew so it can be finished later with /brew."""
+        values = {column: draft.get(column) for column in BREW_COLUMNS}
+        if draft.get("brew_id"):
+            return await self.brews.update_open(user_id, draft["brew_id"], values, status="brewing")
+        return await self.brews.add(user_id, values, status="brewing")
+
+    async def discard(self, user_id: int, brew_id: int) -> None:
+        await self.brews.delete_open(user_id, brew_id)
+
+    @staticmethod
+    def find_brewing(ctx: dict[str, Any], brew_id: int) -> Optional[dict[str, Any]]:
+        return next((brew for brew in ctx.get("brewing", []) if brew["id"] == brew_id), None)
+
+    @staticmethod
+    def resume_draft(brew: dict[str, Any]) -> dict[str, Any]:
+        """Turn an open brew back into a draft, positioned at its first empty parameter."""
+        draft = {column: brew.get(column) for column in BREW_COLUMNS}
+        draft.update(
+            brew_id=brew["id"],
+            started_at=brew["created_at"],
+            grinder_name=brew.get("grinder_name"),
+            brewer_name=brew.get("brewer_name"),
+        )
+        fields = BREW_METHODS[brew["method"]].fields
+        draft["field_index"] = next((i for i, f in enumerate(fields) if brew.get(f.column) is None), len(fields))
+        return draft
+
+    @staticmethod
+    def elapsed_seconds(started_at: Optional[str]) -> Optional[float]:
+        if not started_at:
+            return None
+        try:
+            started = datetime.fromisoformat(started_at)
+        except ValueError:
+            return None
+        seconds = (datetime.now(timezone.utc) - started).total_seconds()
+        return seconds if seconds > 0 else None
 
     @staticmethod
     def find_bean(ctx: dict[str, Any], bean_id: Optional[int]) -> Optional[dict[str, Any]]:
@@ -51,11 +105,17 @@ class BrewService:
     @staticmethod
     def default_bean(ctx: dict[str, Any]) -> Optional[dict[str, Any]]:
         """The bean from the most recent brew if still active, else the newest bag."""
-        active = {bean["id"] for bean in ctx["beans"]}
+        beans = BrewService.active_beans(ctx)
+        active = {bean["id"] for bean in beans}
         for brew in ctx["recent"]:
             if brew["bean_id"] in active:
                 return BrewService.find_bean(ctx, brew["bean_id"])
-        return ctx["beans"][0] if ctx["beans"] else None
+        return beans[0] if beans else None
+
+    @staticmethod
+    def active_beans(ctx: dict[str, Any]) -> list[dict[str, Any]]:
+        """Beans that can start a brew; archived bags are in the context only for open brews."""
+        return [bean for bean in ctx["beans"] if not bean.get("archived")]
 
     @staticmethod
     def _last(ctx: dict[str, Any], *, method: str, column: str, bean_id=None, grinder_id=None, match_grinder=False):
@@ -116,11 +176,16 @@ class BrewService:
         last = cls._last(ctx, method=method, column=field.column, bean_id=draft["bean_id"])
         last = last or cls._last(ctx, method=method, column=field.column)
         options: list[tuple[str, float]] = []
+        elapsed = cls.elapsed_seconds(draft.get("started_at")) if field.column == "time_s" else None
+        if elapsed:
+            value = round(elapsed / field.scale, 1 if field.scale > 1 else 0)
+            options.append((f"🕐 {_fmt(value)} (since start)", value))
         plan = cls.ai_plan(ctx, draft["bean_id"], method) or {}
         planned = plan.get("next_brew", {}).get(field.column)
         if planned is not None:
             value = round(planned / field.scale, 2)
-            options.append((f"🤖 {_fmt(value)}", value))
+            if all(existing != value for _, existing in options):
+                options.append((f"🤖 {_fmt(value)}", value))
         if last:
             value = round(last[field.column] / field.scale, 2)
             if all(existing != value for _, existing in options):
