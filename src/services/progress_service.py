@@ -6,6 +6,8 @@ from telebot import types
 
 from src.repositories.brew_repository import BrewRepository
 from src.services.notification_service import NotificationService
+from src.core.logging import logger
+from src.utils.rich import ProgressRich
 from src.utils.text import ProgressText
 
 
@@ -39,10 +41,17 @@ class ProgressService:
         attempt = await self.brews.count(user_id, draft["bean_id"], draft["method"])
         history = await self.brews.history(user_id, draft["bean_id"], draft["method"], limit=2)
         previous = next((brew for brew in history if brew.id != brew_id), None)
-        caption = ProgressText.caption(draft, ctx, attempt=attempt, previous=previous)
-
         bean = next((b for b in ctx["beans"] if b["id"] == draft["bean_id"]), {})
         photos = [p for p in (draft.get("photo_file_id"), bean.get("photo_file_id")) if p]
+        if self.notifications.rich:
+            try:
+                rich = ProgressRich.card(draft, ctx, attempt=attempt, previous=previous, photos=photos)
+                await self.notifications.send_rich_message(self.chat_id, rich, message_thread_id=self.thread_id)
+                return
+            except Exception as exc:
+                logger.warning("Rich progress post failed for brew %s, sending photos: %s", brew_id, exc, exc_info=exc)
+
+        caption = ProgressText.caption(draft, ctx, attempt=attempt, previous=previous)
         if len(photos) > 1:
             media = [types.InputMediaPhoto(photos[0], caption=caption, parse_mode="HTML")]
             media += [types.InputMediaPhoto(photo) for photo in photos[1:]]

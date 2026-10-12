@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 from telebot import TeleBot, types
 from telebot.asyncio_helper import ApiTelegramException
@@ -17,6 +17,7 @@ Markup = Optional[types.InlineKeyboardMarkup | types.ReplyKeyboardMarkup]
 @dataclass
 class NotificationService:
     bot: BotLike
+    rich: bool = True
 
     async def _call_bot(self, method_name: str, *args, **kwargs):
         bot_method = getattr(self.bot, method_name)
@@ -184,6 +185,65 @@ class NotificationService:
         return await self.edit_message_text(
             message.chat.id, message.message_id, text, reply_markup=reply_markup
         )
+
+    async def send_rich_message(
+        self,
+        chat_id: int | str,
+        rich: types.InputRichMessage,
+        *,
+        reply_markup: Markup = None,
+        message_thread_id: Optional[int] = None,
+    ) -> types.Message:
+        message = await self._call_bot(
+            "send_rich_message", chat_id, rich, reply_markup=reply_markup, message_thread_id=message_thread_id
+        )
+        logger.log(f"Sent rich message to {chat_id}", level="DEBUG")
+        return message
+
+    async def send_rich_or_text(
+        self,
+        chat_id: int | str,
+        rich: Callable[[], types.InputRichMessage],
+        text: str,
+        *,
+        reply_markup: Markup = None,
+        message_thread_id: Optional[int] = None,
+    ) -> types.Message:
+        """Send a rich message, falling back to the plain HTML text if rich is off or fails."""
+        if self.rich:
+            try:
+                return await self.send_rich_message(
+                    chat_id, rich(), reply_markup=reply_markup, message_thread_id=message_thread_id
+                )
+            except Exception as exc:
+                logger.warning("Rich message to %s failed, sending text: %s", chat_id, exc, exc_info=exc)
+        return await self.send_message(
+            chat_id, text, reply_markup=reply_markup, message_thread_id=message_thread_id
+        )
+
+    async def edit_rich_or_text(
+        self,
+        chat_id: int,
+        message_id: int,
+        rich: Callable[[], types.InputRichMessage],
+        text: str,
+        *,
+        reply_markup: Optional[types.InlineKeyboardMarkup] = None,
+    ) -> types.Message | bool | None:
+        """Turn a text message into a rich one, falling back to editing in the plain HTML text."""
+        if self.rich:
+            try:
+                return await self._call_edit(
+                    "edit_message_text",
+                    None,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    reply_markup=reply_markup,
+                    rich_message=rich(),
+                )
+            except Exception as exc:
+                logger.warning("Rich edit of %s/%s failed, using text: %s", chat_id, message_id, exc, exc_info=exc)
+        return await self.edit_message_text(chat_id, message_id, text, reply_markup=reply_markup)
 
     async def clear_reply_markup(self, chat_id: int, message_id: int) -> None:
         """Remove inline buttons from an older message, ignoring messages that are gone."""
