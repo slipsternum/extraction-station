@@ -8,7 +8,7 @@ from src.core.logging import logger
 from src.models.coffee import Bean
 from src.repositories.bean_repository import BeanRepository
 from src.services.llm_service import LLMService
-from src.utils.parsing import parse_date, today_utc
+from src.utils.parsing import parse_date, today_local
 
 BEAN_FIELDS: tuple[str, ...] = (
     "name",
@@ -66,7 +66,7 @@ class BeanService:
 
     async def _extract(self, content: list[dict[str, Any]]) -> dict[str, Any]:
         messages = [
-            {"role": "system", "content": _LABEL_PROMPT.format(today=today_utc().isoformat())},
+            {"role": "system", "content": _LABEL_PROMPT.format(today=today_local().isoformat())},
             {"role": "user", "content": content},
         ]
         raw = await self.llm.complete_json(messages)

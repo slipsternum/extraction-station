@@ -36,6 +36,7 @@ BOT_TOKEN: str = _get_env("BOT_TOKEN", required=True)
 LOGGING_BOT_TOKEN: str | None = _get_env("LOGGING_BOT_TOKEN") or None
 LOGGER_CHAT_ID: int | None = int(os.getenv("LOGGER_CHAT_ID", "0")) or None
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
+UTC_OFFSET_HOURS: float = float(os.getenv("UTC_OFFSET_HOURS", "8"))
 
 SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "./.data/data.sqlite")
 SQLITE_SCHEMA_PATH = os.getenv("SQLITE_SCHEMA_PATH", "./src/models/schemas/bot_schema.sql")
@@ -75,6 +76,7 @@ __all__ = [
     "LOGGING_BOT_TOKEN",
     "LOGGER_CHAT_ID",
     "LOG_LEVEL",
+    "UTC_OFFSET_HOURS",
     "SQLITE_DB_PATH",
     "SQLITE_SCHEMA_PATH",
     "STATE_STORAGE_PATH",

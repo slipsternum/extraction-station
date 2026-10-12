@@ -51,7 +51,7 @@ When any brews are in progress, `/brew` lists them first:
 ```
 ⏳ In progress
 Cold brew · Guji
-started 11 Oct 23:09 UTC (14h ago)
+started 12 Oct 07:09 (14h ago)
 
 [▶ Cold brew · Guji] [🗑]
 [➕ New brew]
@@ -191,12 +191,13 @@ To set it up:
 
 If a post fails, the bot tells you why in your private chat. The brew itself is always saved.
 
-### Storage and logging
+### Storage, time zone and logging
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `SQLITE_DB_PATH` | SQLite database | `./.data/data.sqlite` |
 | `STATE_STORAGE_PATH` | Conversation state (the brew you're tapping through) | `./.data/states.pkl` |
+| `UTC_OFFSET_HOURS` | Your time zone, for dates and times shown in chat (stored in UTC) | `8` |
 | `LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING` or `ERROR` | `INFO` |
 | `LOGGING_BOT_TOKEN` / `LOGGER_CHAT_ID` | Optional: mirror logs to a Telegram chat | - |
 

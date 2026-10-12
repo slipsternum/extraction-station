@@ -8,7 +8,7 @@ from src.models.coffee import BREW_COLUMNS, BREW_METHODS, CLARITY_LABELS, Brew, 
 from src.repositories.brew_repository import BrewRepository
 from src.services.brew_service import BrewService
 from src.services.llm_service import LLMService
-from src.utils.parsing import today_utc
+from src.utils.parsing import to_local, today_local
 
 _SYSTEM_PROMPT = """You are an experienced barista coaching a home brewer who is dialling in.
 You get the beans, the equipment, the brew just made and earlier brews of the same beans and
@@ -96,7 +96,7 @@ class AdviceService:
             details.append(f"{bean['roast_level']} roast")
         if bean.get("roast_date"):
             try:
-                days = (today_utc() - date.fromisoformat(bean["roast_date"])).days
+                days = (today_local() - date.fromisoformat(bean["roast_date"])).days
                 details.append(f"roasted {bean['roast_date']} ({days} days ago)")
             except ValueError:
                 details.append(f"roasted {bean['roast_date']}")
@@ -115,7 +115,7 @@ class AdviceService:
             lines += ["", "Earlier brews, newest first:"]
             for brew in earlier:
                 values = {column: getattr(brew, column) for column in BREW_COLUMNS}
-                lines.append(f"#{brew.id} {brew.created_at[:10]}: {AdviceService._describe(values, method)}")
+                lines.append(f"#{brew.id} {to_local(brew.created_at):%Y-%m-%d}: {AdviceService._describe(values, method)}")
                 if brew.ai_advice and brew.ai_advice.get("primary_change"):
                     lines.append(f"  Advice given after it: {brew.ai_advice['primary_change']}")
         return "\n".join(lines)

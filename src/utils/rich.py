@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import date
 from typing import Any, Mapping, Optional, Sequence
 
 from telebot import types
 
 from src.models.coffee import BREW_METHODS, CLARITY_LABELS, EXTRACTION_LABELS, BrewField
+from src.utils.parsing import to_local
 from src.utils.text import EXTRACTION_EMOJI, BrewText, bean_label, format_value, roast_age, started_label
 
 RichText = Any
@@ -130,7 +130,7 @@ class BrewRich:
             for brew in brews:
                 method = BREW_METHODS.get(brew.method)
                 label = method.label if method else brew.method
-                day = date.fromisoformat(brew.created_at[:10])
+                day = to_local(brew.created_at)
                 when = f"{day.day} {day:%b}"
                 ratio = BrewText.ratio({"dose_g": brew.dose_g, "yield_g": brew.yield_g, "water_g": brew.water_g})
                 result = " ".join(
