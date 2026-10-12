@@ -18,6 +18,7 @@ from src.utils.parsing import parse_number, split_notes
 from src.utils.text import BrewText, ProgressText, bean_label
 
 CANCEL_ROW: list[Button] = [("✖ Cancel", "brew:discard")]
+PARK_BUTTON: Button = ("⏸ Finish later", "brew:park")
 EXTRACTION_BUTTONS: tuple[tuple[str, str], ...] = (("😖 Under", "under"), ("👌 Good", "good"), ("😬 Over", "over"))
 
 
@@ -61,11 +62,20 @@ def register_brew_handlers(
     async def guard(call: types.CallbackQuery, state: AsyncStateContext):
         """Load the draft for a button tap, rejecting taps on an outdated panel."""
         draft, ctx, panel = await load(state)
-        if not draft or panel != call.message.message_id:
+        if panel != call.message.message_id:
             await notifications.answer_callback(call, BrewText.stale())
             return None
         await notifications.answer_callback(call)
         return draft, ctx
+
+    async def step_brewing(chat_id, state, draft, ctx, call=None):
+        rows: list[list[Button]] = [
+            [(BrewText.brewing_button(b), f"brew:resume:{b['id']}"), ("🗑", f"brew:drop:{b['id']}")]
+            for b in ctx["brewing"][:10]
+        ]
+        rows.append([("➕ New brew", "brew:new")])
+        text = BrewText.brewing_list(ctx["brewing"])
+        await render(chat_id, state, BrewStates.brewing, draft, text, inline(rows), call)
 
     async def step_bean(chat_id, state, draft, ctx, call=None):
         bean = BrewService.find_bean(ctx, draft["bean_id"])
@@ -107,16 +117,16 @@ def register_brew_handlers(
         field = fields[index]
         options = BrewService.suggest_values(ctx, draft, field)
         rows = chunk([(label, f"brew:val:{_num(value)}") for label, value in options], 2)
-        rows.append([("⏭ Skip", "brew:val:skip")])
+        rows.append([("⏭ Skip", "brew:val:skip"), PARK_BUTTON])
         text = BrewText.param(field, bool(options))
         await render(chat_id, state, BrewStates.param, draft, text, inline(rows), call)
 
     async def step_photo(chat_id, state, draft, ctx, call=None):
-        markup = inline([[("⏭ Skip photo", "brew:photoskip")]])
+        markup = inline([[("⏭ Skip photo", "brew:photoskip"), PARK_BUTTON]])
         await render(chat_id, state, BrewStates.photo, draft, BrewText.photo(), markup, call)
 
     async def step_extraction(chat_id, state, draft, ctx, call=None):
-        rows = [[(label, f"brew:ext:{key}") for label, key in EXTRACTION_BUTTONS]]
+        rows = [[(label, f"brew:ext:{key}") for label, key in EXTRACTION_BUTTONS], [PARK_BUTTON]]
         await render(chat_id, state, BrewStates.extraction, draft, BrewText.extraction(), inline(rows), call)
 
     async def step_clarity(chat_id, state, draft, ctx, call=None):
@@ -173,25 +183,84 @@ def register_brew_handlers(
 
         return decorator
 
+    async def start_new(chat_id, state, ctx, call=None):
+        """Begin a fresh brew, or explain what's missing before one can start."""
+        bean = BrewService.default_bean(ctx)
+        problem = None
+        if "grinder" not in ctx["equipment"]:
+            problem = BrewText.needs_grinder()
+        elif bean is None:
+            problem = BrewText.needs_beans()
+        if problem:
+            await state.delete()
+            if call is not None:
+                await notifications.edit_message(call.message, problem)
+            else:
+                await notifications.send_message(chat_id, problem)
+            return
+        await step_bean(chat_id, state, {"bean_id": bean["id"]}, ctx, call)
+
     @bot.message_handler(commands=["brew"], isadmin=True, isprivchat=True)
     async def handle_brew(message: types.Message, state: AsyncStateContext):
         ctx = await brews.load_context(message.from_user.id)
-        if "grinder" not in ctx["equipment"]:
-            await notifications.send_message(message.chat.id, BrewText.needs_grinder())
-            return
-        bean = BrewService.default_bean(ctx)
-        if bean is None:
-            await notifications.send_message(message.chat.id, BrewText.needs_beans())
-            return
         await state.delete()
-        await state.set(BrewStates.bean)
+        await state.set(BrewStates.brewing)
         await state.add_data(ctx=ctx)
-        await step_bean(message.chat.id, state, {"bean_id": bean["id"]}, ctx)
+        if ctx["brewing"]:
+            await step_brewing(message.chat.id, state, {}, ctx)
+        else:
+            await start_new(message.chat.id, state, ctx)
 
     @bot.message_handler(commands=["history"], isadmin=True, isprivchat=True)
     async def handle_history(message: types.Message, state: AsyncStateContext):
         recent = await brews.recent(message.from_user.id, limit=10)
-        await notifications.send_message(message.chat.id, BrewText.history(recent))
+        brewing = await brews.brewing(message.from_user.id)
+        await notifications.send_message(message.chat.id, BrewText.history(recent, brewing))
+
+    @on_button("brew:new", BrewStates.brewing)
+    async def on_new(call, state, draft, ctx):
+        await start_new(call.message.chat.id, state, ctx, call)
+
+    @on_button("brew:resume:", BrewStates.brewing)
+    async def on_resume(call, state, draft, ctx):
+        brew = BrewService.find_brewing(ctx, int(callback_arg(call)))
+        if brew is None:
+            return
+        draft = BrewService.resume_draft(brew)
+        params_done = draft["field_index"] >= len(BREW_METHODS[draft["method"]].fields)
+        step = step_extraction if params_done and draft.get("photo_file_id") else step_param
+        await step(call.message.chat.id, state, draft, ctx, call)
+
+    @on_button("brew:drop:", BrewStates.brewing)
+    async def on_drop(call, state, draft, ctx):
+        brew = BrewService.find_brewing(ctx, int(callback_arg(call)))
+        if brew is None:
+            return
+        markup = inline([[("🗑 Discard it", f"brew:dropok:{brew['id']}"), ("↩ Back", "brew:list")]])
+        await render(call.message.chat.id, state, BrewStates.brewing, draft, BrewText.confirm_drop(brew), markup, call)
+
+    @on_button("brew:dropok:", BrewStates.brewing)
+    async def on_drop_confirmed(call, state, draft, ctx):
+        brew_id = int(callback_arg(call))
+        await brews.discard(call.from_user.id, brew_id)
+        ctx["brewing"] = [b for b in ctx["brewing"] if b["id"] != brew_id]
+        await state.add_data(ctx=ctx)
+        await step_brewing(call.message.chat.id, state, draft, ctx, call)
+
+    @on_button("brew:list", BrewStates.brewing)
+    async def on_list(call, state, draft, ctx):
+        await step_brewing(call.message.chat.id, state, draft, ctx, call)
+
+    async def park(call, state, draft, ctx):
+        brew_id = await brews.park(call.from_user.id, draft)
+        await state.delete()
+        if brew_id is None:
+            await notifications.edit_message(call.message, BrewText.already_finished())
+            return
+        await notifications.edit_message(call.message, BrewText.summary(draft, ctx, header=BrewText.parked()))
+
+    for step in (BrewStates.param, BrewStates.photo, BrewStates.extraction):
+        on_button("brew:park", step)(park)
 
     @on_button("brew:beanok", BrewStates.bean)
     async def on_bean_ok(call, state, draft, ctx):
@@ -199,7 +268,7 @@ def register_brew_handlers(
 
     @on_button("brew:beanswitch", BrewStates.bean)
     async def on_bean_switch(call, state, draft, ctx):
-        rows = [[(bean_label(b)[:60], f"brew:usebean:{b['id']}")] for b in ctx["beans"][:12]]
+        rows = [[(bean_label(b)[:60], f"brew:usebean:{b['id']}")] for b in BrewService.active_beans(ctx)[:12]]
         markup = inline([*rows, CANCEL_ROW])
         await render(call.message.chat.id, state, BrewStates.bean, draft, BrewText.pick_bean(), markup, call)
 
@@ -336,6 +405,9 @@ def register_brew_handlers(
     async def on_save(call, state, draft, ctx):
         brew_id = await brews.save(call.from_user.id, draft)
         await state.delete()
+        if brew_id is None:
+            await notifications.edit_message(call.message, BrewText.already_finished())
+            return
         text = BrewText.summary(draft, ctx, header=BrewText.saved())
         await notifications.edit_message(call.message, text)
         if progress.enabled:
@@ -365,8 +437,12 @@ def register_brew_handlers(
 
     @bot.callback_query_handler(func=callback_prefix("brew:discard"), isadmin=True)
     async def on_discard(call: types.CallbackQuery, state: AsyncStateContext):
-        if await guard(call, state) is None:
+        loaded = await guard(call, state)
+        if loaded is None:
             return
+        draft, _ = loaded
+        if draft.get("brew_id"):
+            await brews.discard(call.from_user.id, draft["brew_id"])
         await state.delete()
         await notifications.edit_message(call.message, BrewText.discarded())
 

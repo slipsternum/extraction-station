@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS brews (
     rating INTEGER CHECK (rating BETWEEN 1 AND 5),
     comment TEXT,
     photo_file_id TEXT,
+    status TEXT NOT NULL DEFAULT 'done' CHECK (status IN ('brewing', 'done')),
+    finished_at TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 );
 
